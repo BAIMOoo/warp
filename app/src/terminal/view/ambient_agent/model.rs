@@ -20,7 +20,7 @@ use crate::ai::ambient_agents::{
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
 use crate::ai::blocklist::handoff::touched_repos::TouchedWorkspace;
 #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-use crate::ai::blocklist::handoff::CloudLaunchAttachments;
+use crate::ai::blocklist::handoff::HandoffLaunchAttachments;
 use crate::ai::blocklist::BlocklistAIHistoryModel;
 use crate::ai::cloud_environments::CloudAmbientAgentEnvironment;
 use crate::ai::execution_profiles::{CloudAgentComputerUseState, ComputerUsePermission};
@@ -147,7 +147,7 @@ pub(crate) struct PendingHandoff {
 #[derive(Debug, Clone)]
 pub(crate) struct PendingCloudLaunch {
     pub(crate) prompt: String,
-    pub(crate) attachments: CloudLaunchAttachments,
+    pub(crate) attachments: HandoffLaunchAttachments,
 }
 
 /// Status of the ambient agent run.
@@ -527,13 +527,6 @@ impl AmbientAgentViewModel {
 
     #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
     pub(crate) fn pending_handoff_has_explicit_environment(&self) -> bool {
-        self.has_handoff_explicit_environment_lock()
-    }
-
-    /// True when the handoff owns an explicit environment that must not be
-    /// overwritten by default-selection or overlap logic.
-    #[cfg(all(feature = "local_fs", not(target_family = "wasm")))]
-    fn has_handoff_explicit_environment_lock(&self) -> bool {
         self.pending_handoff
             .as_ref()
             .is_some_and(|handoff| handoff.explicit_environment_id.is_some())

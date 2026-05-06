@@ -14,7 +14,7 @@ fn attachment() -> AttachmentInput {
 fn pending_launch() -> PendingCloudLaunch {
     PendingCloudLaunch {
         prompt: "fix tests".to_owned(),
-        attachments: CloudLaunchAttachments {
+        attachments: HandoffLaunchAttachments {
             request_attachments: vec![attachment()],
             display_attachments: vec![],
         },
