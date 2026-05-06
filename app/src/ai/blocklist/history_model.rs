@@ -249,7 +249,7 @@ pub struct BlocklistAIHistoryModel {
     /// via `set_parent_for_conversation` and `restore_conversations`.
     children_by_parent: HashMap<AIConversationId, Vec<AIConversationId>>,
 
-    /// Flat set of all known child conversation IDs, derived from
+    /// Flat set of all known child conversation IDs, maintained in sync with
     /// `children_by_parent`. Used by `all_ai_queries()` for O(1) filtering
     /// so that synthetic orchestrator prompts don't appear in the user's
     /// prompt completion history.
@@ -2091,6 +2091,7 @@ impl BlocklistAIHistoryModel {
         self.all_conversations_metadata.clear();
         self.agent_id_to_conversation_id.clear();
         self.server_token_to_conversation_id.clear();
+        self.children_by_parent.clear();
         self.child_conversation_ids.clear();
     }
 }
