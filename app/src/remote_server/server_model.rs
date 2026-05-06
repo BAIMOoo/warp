@@ -21,7 +21,7 @@ use warp_util::file::FileId;
 use super::proto::{
     client_message, delete_file_response, run_command_response, save_buffer_response,
     server_message, write_file_response, Abort, Authenticate, BufferEdit, BufferUpdatedPush,
-    CloseBuffer, ClientMessage, DeleteFile, DeleteFileResponse, DeleteFileSuccess, ErrorCode,
+    ClientMessage, CloseBuffer, DeleteFile, DeleteFileResponse, DeleteFileSuccess, ErrorCode,
     ErrorResponse, FailedFileRead, FileContextProto, FileOperationError, Initialize,
     InitializeResponse, NavigatedToDirectory, NavigatedToDirectoryResponse, OpenBuffer,
     OpenBufferResponse, ReadFileContextResponse, ResolveConflict, RunCommandError,
@@ -336,13 +336,9 @@ impl ServerModel {
         {
             let gbm = GlobalBufferModel::handle(ctx);
             ctx.subscribe_to_model(&gbm, |me, event, ctx| match event {
-                GlobalBufferModelEvent::BufferLoaded {
-                    file_id, ..
-                } => {
+                GlobalBufferModelEvent::BufferLoaded { file_id, .. } => {
                     // Complete a pending OpenBuffer request.
-                    if let Some((request_id, conn_id)) =
-                        me.buffers.take_pending(file_id)
-                    {
+                    if let Some((request_id, conn_id)) = me.buffers.take_pending(file_id) {
                         let gbm = GlobalBufferModel::handle(ctx);
                         let content = gbm
                             .as_ref(ctx)
@@ -374,10 +370,7 @@ impl ServerModel {
                         return;
                     };
                     // Find the path for this file_id.
-                    let path = me
-                        .buffers
-                        .path_for_file_id(*file_id)
-                        .unwrap_or_default();
+                    let path = me.buffers.path_for_file_id(*file_id).unwrap_or_default();
 
                     let proto_edits: Vec<TextEdit> = edits
                         .iter()
@@ -405,9 +398,7 @@ impl ServerModel {
                 }
                 GlobalBufferModelEvent::FileSaved { file_id } => {
                     // Complete a pending SaveBuffer request.
-                    if let Some((request_id, conn_id)) =
-                        me.buffers.take_pending(file_id)
-                    {
+                    if let Some((request_id, conn_id)) = me.buffers.take_pending(file_id) {
                         me.send_server_message(
                             Some(conn_id),
                             Some(&request_id),
@@ -420,9 +411,7 @@ impl ServerModel {
                     }
                 }
                 GlobalBufferModelEvent::FailedToSave { file_id, error } => {
-                    if let Some((request_id, conn_id)) =
-                        me.buffers.take_pending(file_id)
-                    {
+                    if let Some((request_id, conn_id)) = me.buffers.take_pending(file_id) {
                         me.send_server_message(
                             Some(conn_id),
                             Some(&request_id),
@@ -437,9 +426,7 @@ impl ServerModel {
                     }
                 }
                 GlobalBufferModelEvent::FailedToLoad { file_id, error } => {
-                    if let Some((request_id, conn_id)) =
-                        me.buffers.take_pending(file_id)
-                    {
+                    if let Some((request_id, conn_id)) = me.buffers.take_pending(file_id) {
                         me.send_server_message(
                             Some(conn_id),
                             Some(&request_id),
@@ -1358,18 +1345,15 @@ impl ServerModel {
 
         // Not yet loaded — stash request info so the GlobalBufferModelEvent
         // subscription can send the response when content arrives.
-        self.buffers.insert_pending(file_id, request_id.clone(), conn_id);
+        self.buffers
+            .insert_pending(file_id, request_id.clone(), conn_id);
         HandlerOutcome::Async(None)
     }
 
     /// Handles `BufferEdit` notification (fire-and-forget).
     /// Delegates to `GlobalBufferModel::apply_client_edit`. Stale edits
     /// are silently discarded.
-    fn handle_buffer_edit(
-        &mut self,
-        msg: BufferEdit,
-        ctx: &mut ModelContext<Self>,
-    ) {
+    fn handle_buffer_edit(&mut self, msg: BufferEdit, ctx: &mut ModelContext<Self>) {
         let Some(file_id) = self.buffers.file_id_for_path(&msg.path) else {
             log::warn!("BufferEdit for unknown buffer: {}", msg.path);
             return;
@@ -1406,9 +1390,8 @@ impl ServerModel {
             ));
         };
 
-        let result = GlobalBufferModel::handle(ctx).update(ctx, |gbm, ctx| {
-            gbm.save_server_local(file_id, ctx)
-        });
+        let result = GlobalBufferModel::handle(ctx)
+            .update(ctx, |gbm, ctx| gbm.save_server_local(file_id, ctx));
 
         match result {
             Ok(()) => {
@@ -1431,11 +1414,7 @@ impl ServerModel {
 
     /// Handles `ResolveConflict` notification (fire-and-forget).
     /// Accepts the client's content, replaces the server buffer, and saves to disk.
-    fn handle_resolve_conflict(
-        &mut self,
-        msg: ResolveConflict,
-        ctx: &mut ModelContext<Self>,
-    ) {
+    fn handle_resolve_conflict(&mut self, msg: ResolveConflict, ctx: &mut ModelContext<Self>) {
         log::info!("Handling ResolveConflict path={}", msg.path);
 
         let Some(file_id) = self.buffers.file_id_for_path(&msg.path) else {
@@ -1456,11 +1435,7 @@ impl ServerModel {
     /// Handles `CloseBuffer` notification (fire-and-forget).
     /// Removes the connection from the buffer's connection set.
     /// Deallocates the buffer if no connections remain.
-    fn handle_close_buffer(
-        &mut self,
-        msg: CloseBuffer,
-        ctx: &mut ModelContext<Self>,
-    ) {
+    fn handle_close_buffer(&mut self, msg: CloseBuffer, ctx: &mut ModelContext<Self>) {
         log::info!("Handling CloseBuffer path={}", msg.path);
         self.buffers.close_buffer(&msg.path, ctx);
     }
