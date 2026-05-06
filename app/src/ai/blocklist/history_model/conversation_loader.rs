@@ -473,7 +473,7 @@ impl BlocklistAIHistoryModel {
                     .as_ref()
                     .and_then(|data| data.parent_conversation_id.as_deref())
                 {
-                if let Ok(parent_id) = AIConversationId::try_from(parent_id_str.to_string()) {
+                    if let Ok(parent_id) = AIConversationId::try_from(parent_id_str.to_string()) {
                         self.children_by_parent
                             .entry(parent_id)
                             .or_default()
