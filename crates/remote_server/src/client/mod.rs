@@ -71,12 +71,12 @@ pub enum ClientEvent {
     },
     /// A server message could not be decoded and had no parseable request_id.
     MessageDecodingError,
-    /// A buffer was updated on the server (file change or edit rejection).
+    /// A buffer was updated on the server (file changed on disk).
     BufferUpdated {
         path: String,
         new_server_version: u64,
         expected_client_version: u64,
-        content: String,
+        edits: Vec<crate::proto::TextEdit>,
     },
 }
 /// Parameters for the `Initialize` handshake, sent to the daemon at
@@ -477,7 +477,7 @@ impl RemoteServerClient {
                 path: push.path,
                 new_server_version: push.new_server_version,
                 expected_client_version: push.expected_client_version,
-                content: push.content,
+                edits: push.edits,
             }),
             other => {
                 safe_warn!(

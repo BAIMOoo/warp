@@ -303,6 +303,15 @@ pub enum RemoteServerManagerEvent {
         host_id: HostId,
         update: RepoMetadataUpdate,
     },
+    /// A buffer was updated on the remote host (file changed on disk).
+    /// The app layer should forward this to `GlobalBufferModel::handle_buffer_updated_push`.
+    BufferUpdated {
+        host_id: HostId,
+        path: String,
+        new_server_version: u64,
+        expected_client_version: u64,
+        edits: Vec<crate::proto::TextEdit>,
+    },
 
     // --- Setup events ---
     /// Intermediate state change during the binary check/install flow.
@@ -377,7 +386,8 @@ impl RemoteServerManagerEvent {
             | RemoteServerManagerEvent::HostDisconnected { .. }
             | RemoteServerManagerEvent::RepoMetadataSnapshot { .. }
             | RemoteServerManagerEvent::RepoMetadataUpdated { .. }
-            | RemoteServerManagerEvent::RepoMetadataDirectoryLoaded { .. } => None,
+            | RemoteServerManagerEvent::RepoMetadataDirectoryLoaded { .. }
+            | RemoteServerManagerEvent::BufferUpdated { .. } => None,
         }
     }
 }
@@ -1235,6 +1245,20 @@ impl RemoteServerManager {
             }
             ClientEvent::MessageDecodingError => {
                 ctx.emit(RemoteServerManagerEvent::ServerMessageDecodingError { session_id });
+            }
+            ClientEvent::BufferUpdated {
+                path,
+                new_server_version,
+                expected_client_version,
+                edits,
+            } => {
+                ctx.emit(RemoteServerManagerEvent::BufferUpdated {
+                    host_id,
+                    path,
+                    new_server_version,
+                    expected_client_version,
+                    edits,
+                });
             }
             ClientEvent::Disconnected => {
                 // Handled by the drain loop's completion callback.
