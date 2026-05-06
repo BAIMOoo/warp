@@ -249,6 +249,12 @@ pub struct BlocklistAIHistoryModel {
     /// via `set_parent_for_conversation` and `restore_conversations`.
     children_by_parent: HashMap<AIConversationId, Vec<AIConversationId>>,
 
+    /// Flat set of all known child conversation IDs, derived from
+    /// `children_by_parent`. Used by `all_ai_queries()` for O(1) filtering
+    /// so that synthetic orchestrator prompts don't appear in the user's
+    /// prompt completion history.
+    child_conversation_ids: HashSet<AIConversationId>,
+
     #[cfg(feature = "local_fs")]
     db_connection: Option<Arc<Mutex<SqliteConnection>>>,
 }
@@ -440,6 +446,13 @@ impl BlocklistAIHistoryModel {
         if !children.contains(&child_id) {
             children.push(child_id);
         }
+        self.child_conversation_ids.insert(child_id);
+    }
+
+    /// Returns true if the given conversation was spawned by an orchestrator
+    /// parent rather than created directly by the user.
+    fn is_child_conversation(&self, id: &AIConversationId) -> bool {
+        self.child_conversation_ids.contains(id)
     }
 
     /// Returns the child conversation IDs for a parent from the startup index.
@@ -680,6 +693,7 @@ impl BlocklistAIHistoryModel {
                 if !children.contains(&conversation_id) {
                     children.push(conversation_id);
                 }
+                self.child_conversation_ids.insert(conversation_id);
             }
 
             let new_status = conversation.status().clone();
@@ -1718,6 +1732,9 @@ impl BlocklistAIHistoryModel {
             };
 
             for conversation_id in conversation_ids {
+                if self.is_child_conversation(conversation_id) {
+                    continue;
+                }
                 if let Some(conversation) = self.conversations_by_id.get(conversation_id) {
                     for exchange in conversation.root_task_exchanges() {
                         if let Some(query) = ai_exchange_to_query_history(exchange, history_order) {
@@ -1739,6 +1756,9 @@ impl BlocklistAIHistoryModel {
             };
 
             for conversation_id in conversation_ids {
+                if self.is_child_conversation(conversation_id) {
+                    continue;
+                }
                 if let Some(conversation) = self.conversations_by_id.get(conversation_id) {
                     for exchange in conversation.root_task_exchanges() {
                         if let Some(query) = ai_exchange_to_query_history(exchange, history_order) {
@@ -1754,6 +1774,7 @@ impl BlocklistAIHistoryModel {
             .persisted_queries
             .iter()
             .filter(|persisted| !loaded_conversation_ids.contains(&persisted.conversation_id))
+            .filter(|persisted| !self.is_child_conversation(&persisted.conversation_id))
             .filter_map(|persisted| {
                 persisted_ai_input_to_query_history(persisted, HistoryOrder::DifferentSession)
             })
@@ -2070,6 +2091,7 @@ impl BlocklistAIHistoryModel {
         self.all_conversations_metadata.clear();
         self.agent_id_to_conversation_id.clear();
         self.server_token_to_conversation_id.clear();
+        self.child_conversation_ids.clear();
     }
 }
 
