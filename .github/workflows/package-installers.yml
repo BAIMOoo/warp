@@ -1,0 +1,174 @@
+name: Package Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to package. Use oss for fork builds without official Warp secrets.
+        type: choice
+        options:
+          - oss
+          - local
+          - dev
+          - preview
+          - stable
+        default: oss
+      build_macos:
+        description: Build a macOS DMG artifact.
+        type: boolean
+        default: true
+      build_windows:
+        description: Build a Windows installer artifact.
+        type: boolean
+        default: true
+      macos_arch:
+        description: macOS architecture to build. Universal is slower.
+        type: choice
+        options:
+          - aarch64
+          - x86_64
+          - universal
+        default: aarch64
+      windows_arch:
+        description: Windows architecture to build.
+        type: choice
+        options:
+          - x64
+          - arm64
+        default: x64
+      debug_build:
+        description: Build faster debug-profile installers instead of release-profile installers.
+        type: boolean
+        default: false
+      release_tag:
+        description: Optional version tag embedded in the build metadata.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  DEFAULT_RELEASE_TAG: v0.2026.05.07.00.00.oss_00
+
+jobs:
+  package_macos:
+    name: Package macOS DMG (${{ inputs.macos_arch }})
+    if: ${{ inputs.build_macos }}
+    runs-on: macos-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Prepare Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: package-installers-macos-${{ inputs.channel }}-${{ inputs.macos_arch }}-${{ inputs.debug_build }}
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install Rust
+        run: ./script/install_rust
+        shell: bash
+
+      - name: Install build dependencies
+        run: |
+          ./script/install_cargo_release_deps
+          ./script/install_cargo_bundle
+          brew install create-dmg
+        shell: bash
+
+      - name: Add requested Rust target
+        if: ${{ inputs.macos_arch != 'universal' }}
+        run: rustup target add ${{ inputs.macos_arch }}-apple-darwin
+        shell: bash
+
+      - name: Add universal Rust targets
+        if: ${{ inputs.macos_arch == 'universal' }}
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+        shell: bash
+
+      - name: Package DMG
+        id: bundle_app
+        run: |
+          set -euo pipefail
+          args=(--nosign --channel "${{ inputs.channel }}")
+          if [[ "${{ inputs.debug_build }}" == "true" ]]; then
+            args+=(--debug)
+          fi
+          if [[ "${{ inputs.macos_arch }}" != "universal" ]]; then
+            args+=(--arch "${{ inputs.macos_arch }}" --dmg-name-suffix "${{ inputs.macos_arch }}")
+          fi
+          script/bundle "${args[@]}"
+        shell: bash
+        env:
+          GIT_RELEASE_TAG: ${{ inputs.release_tag != '' && inputs.release_tag || env.DEFAULT_RELEASE_TAG }}
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: warp-${{ inputs.channel }}-macos-${{ inputs.macos_arch }}-dmg
+          path: ${{ steps.bundle_app.outputs.dmg_path }}
+          if-no-files-found: error
+
+  package_windows:
+    name: Package Windows installer (${{ inputs.windows_arch }})
+    if: ${{ inputs.build_windows }}
+    runs-on: windows-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Enable long paths
+        shell: bash
+        run: git config --system core.longpaths true
+
+      - name: Prepare Rust cache
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: package-installers-windows-${{ inputs.channel }}-${{ inputs.windows_arch }}-${{ inputs.debug_build }}
+          save-if: ${{ github.ref == 'refs/heads/master' }}
+
+      - name: Install Rust and cargo release dependencies
+        shell: pwsh
+        run: |
+          ./script/windows/install_build_deps.ps1
+          $env:Path = "C:\cargo\bin;$env:USERPROFILE\.cargo\bin;$env:Path"
+          bash ./script/install_cargo_release_deps --no-build-deps
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Add arm64 Rust target
+        if: ${{ inputs.windows_arch == 'arm64' }}
+        shell: pwsh
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Package Windows installer
+        id: bundle_app
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(-Channel "${{ inputs.channel }}" -arch "${{ inputs.windows_arch }}")
+          if [[ "${{ inputs.debug_build }}" == "true" ]]; then
+            args+=(-debug_build)
+          fi
+          script/bundle "${args[@]}"
+        env:
+          GIT_RELEASE_TAG: ${{ inputs.release_tag != '' && inputs.release_tag || env.DEFAULT_RELEASE_TAG }}
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: warp-${{ inputs.channel }}-windows-${{ inputs.windows_arch }}-installer
+          path: ${{ steps.bundle_app.outputs.installer_path }}
+          if-no-files-found: error
