@@ -1974,6 +1974,7 @@ const CHINESE_SIMPLIFIED_SETTINGS_TEXT: &[(&str, &str)] = &[
     ("After current tab", "在当前标签页之后"),
     ("Activate previous/next tab", "激活上一个/下一个标签页"),
     ("Cycle most recent session", "循环切换最近使用的会话"),
+    ("Cycle most recent tab", "循环切换最近使用的标签页"),
     ("Width %", "宽度 %"),
     ("Height %", "高度 %"),
     (

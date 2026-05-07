@@ -3,6 +3,7 @@ use crate::ai::blocklist::{BlocklistAIHistoryModel, BlocklistAIPermissions};
 use crate::ai::document::ai_document_model::AIDocumentModel;
 use crate::ai::execution_profiles::profiles::AIExecutionProfilesModel;
 use crate::ai::facts::manager::AIFactManager;
+use crate::ai::harness_availability::HarnessAvailabilityModel;
 use crate::ai::llms::LLMPreferences;
 use crate::ai::outline::RepoOutlines;
 use crate::ai::persisted_workspace::PersistedWorkspace;
@@ -141,6 +142,7 @@ fn initialize_app(app: &mut App) {
     app.add_singleton_model(AgentConversationsModel::new);
     app.add_singleton_model(SessionPermissionsManager::new);
     app.add_singleton_model(LLMPreferences::new);
+    app.add_singleton_model(HarnessAvailabilityModel::new);
     app.add_singleton_model(|_| SettingsPaneManager::new());
     app.add_singleton_model(|_| AIFactManager::new());
 
@@ -269,7 +271,7 @@ fn transferred_tab_workspace(
                 vertical_tabs_panel_open,
                 right_panel_open: false,
                 is_right_panel_maximized: false,
-                for_drag_preview: false,
+                is_tab_drag_preview: false,
             },
             ctx,
         )
@@ -3055,6 +3057,31 @@ fn test_settings_error_banner_renders_simplified_chinese_copy() {
                 fields.button.as_ref().map(|button| button.text.as_str()),
                 Some("打开文件")
             );
+        });
+    });
+}
+
+#[test]
+fn test_tab_mru_order() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+
+        let workspace = mock_workspace(&mut app);
+
+        workspace.update(&mut app, |workspace, ctx| {
+            workspace.add_terminal_tab(false, ctx);
+            workspace.add_terminal_tab(false, ctx);
+
+            let id_a = workspace.tabs[0].pane_group.id();
+            let id_b = workspace.tabs[1].pane_group.id();
+            let id_c = workspace.tabs[2].pane_group.id();
+
+            workspace.handle_action(&WorkspaceAction::ActivateTab(0), ctx);
+            workspace.handle_action(&WorkspaceAction::ActivateTab(1), ctx);
+            workspace.handle_action(&WorkspaceAction::ActivateTab(2), ctx);
+            workspace.handle_action(&WorkspaceAction::ActivateTab(0), ctx);
+
+            assert_eq!(workspace.tab_mru_order(), &[id_a, id_c, id_b]);
         });
     });
 }
