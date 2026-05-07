@@ -1,5 +1,6 @@
 use crate::ai::mcp::{Author, MCPServerUpdate};
 use crate::appearance::Appearance;
+use crate::localization::localized_settings_text;
 use crate::settings_view::mcp_servers::style::{
     INSTALLATION_MODAL_BUTTON_GAP, INSTALLATION_MODAL_PADDING,
 };
@@ -81,7 +82,7 @@ impl UpdateModalBody {
         self.option_mouse_states = vec![];
     }
 
-    fn render_title(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_title(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         let theme = appearance.theme();
         let name = self.server_name.as_deref().unwrap_or("Server");
 
@@ -113,7 +114,7 @@ impl UpdateModalBody {
 
         // Renders MCP title text
         let title = Text::new(
-            format!("Update {name}"),
+            localized_settings_text("Update {name}", app).replace("{name}", name),
             appearance.ui_font_family(),
             appearance.header_font_size(),
         )
@@ -178,12 +179,13 @@ impl UpdateModalBody {
         Container::new(title_row).with_margin_bottom(2.).finish()
     }
 
-    fn render_description(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_description(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         // Modal appears only when multiple updates are available
-        let description = format!(
-            "This server has {} updates available, which would you like to proceed with?",
-            self.update_options.len()
-        );
+        let description = localized_settings_text(
+            "This server has {count} updates available, which would you like to proceed with?",
+            app,
+        )
+        .replace("{count}", &self.update_options.len().to_string());
 
         Text::new(
             description,
@@ -200,6 +202,7 @@ impl UpdateModalBody {
         option: &MCPServerUpdate,
         is_selected: bool,
         appearance: &Appearance,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let theme = appearance.theme();
 
@@ -217,9 +220,9 @@ impl UpdateModalBody {
                 ..
             } => {
                 let publisher_string = match publisher {
-                    Author::CurrentUser => "another device",
+                    Author::CurrentUser => localized_settings_text("another device", app),
                     Author::OtherUser { name } => name,
-                    Author::Unknown => "a team member",
+                    Author::Unknown => localized_settings_text("a team member", app),
                 };
                 let datetime = Local
                     .timestamp_opt(*new_version_ts, 0)
@@ -227,15 +230,18 @@ impl UpdateModalBody {
                     .unwrap_or_else(Local::now);
                 let formatted_time = format_approx_duration_from_now(datetime);
                 (
-                    format!("Update from {publisher_string}"),
+                    localized_settings_text("Update from {publisher}", app)
+                        .replace("{publisher}", publisher_string),
                     formatted_time.to_string(),
                 )
             }
             MCPServerUpdate::Gallery {
                 name, new_version, ..
             } => (
-                format!("Update from {name}"),
-                format!("Version {new_version}"),
+                localized_settings_text("Update from {publisher}", app)
+                    .replace("{publisher}", name),
+                localized_settings_text("Version {new_version}", app)
+                    .replace("{new_version}", &new_version.to_string()),
             ),
         };
 
@@ -298,11 +304,11 @@ impl UpdateModalBody {
         .finish()
     }
 
-    fn render_action_buttons(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_action_buttons(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         let cancel_button = appearance
             .ui_builder()
             .button(ButtonVariant::Text, self.cancel_mouse_state.clone())
-            .with_text_label("Cancel".into())
+            .with_text_label(localized_settings_text("Cancel", app).into())
             .with_style(UiComponentStyles {
                 font_weight: Some(Weight::Bold),
                 font_color: Some(appearance.theme().active_ui_text_color().into()),
@@ -339,7 +345,7 @@ impl UpdateModalBody {
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_child(
                 Text::new_inline(
-                    "Update",
+                    localized_settings_text("Update", app),
                     appearance.ui_font_family(),
                     appearance.ui_font_size(),
                 )
@@ -387,8 +393,8 @@ impl UpdateModalBody {
             .finish()
     }
 
-    fn render_buttons_row(&self, appearance: &Appearance) -> Box<dyn Element> {
-        let action_buttons = self.render_action_buttons(appearance);
+    fn render_buttons_row(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
+        let action_buttons = self.render_action_buttons(appearance, app);
 
         let spacer = Shrinkable::new(1., Container::new(Empty::new().finish()).finish()).finish();
 
@@ -422,13 +428,13 @@ impl View for UpdateModalBody {
             .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
             .with_spacing(16.);
 
-        content_column.add_child(self.render_title(appearance));
-        content_column.add_child(self.render_description(appearance));
+        content_column.add_child(self.render_title(appearance, ctx));
+        content_column.add_child(self.render_description(appearance, ctx));
 
         // Add update options
         if self.update_options.is_empty() {
             let no_updates_text = Text::new(
-                "No updates available",
+                localized_settings_text("No updates available", ctx),
                 appearance.ui_font_family(),
                 appearance.ui_font_size(),
             )
@@ -442,6 +448,7 @@ impl View for UpdateModalBody {
                     option,
                     is_selected,
                     appearance,
+                    ctx,
                 ));
             }
         }
@@ -453,7 +460,7 @@ impl View for UpdateModalBody {
                     .with_uniform_padding(INSTALLATION_MODAL_PADDING)
                     .finish(),
             )
-            .with_child(self.render_buttons_row(appearance))
+            .with_child(self.render_buttons_row(appearance, ctx))
             .finish()
     }
 }

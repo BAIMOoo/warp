@@ -5,7 +5,12 @@ use super::{
     },
     LocalOnlyIconState, SettingsSection, ToggleState,
 };
-use crate::{appearance::Appearance, auth::AuthStateProvider, drive::settings::WarpDriveSettings};
+use crate::{
+    appearance::Appearance,
+    auth::AuthStateProvider,
+    drive::settings::WarpDriveSettings,
+    localization::{localized_for_app, localized_settings_text, UiStringKey},
+};
 use warp_core::{features::FeatureFlag, report_if_error, settings::ToggleableSetting as _};
 use warpui::{
     elements::{Container, Element, Flex, MouseStateHandle, ParentElement, Shrinkable, Text},
@@ -133,13 +138,14 @@ impl SettingsWidget for WarpDriveHeaderWidget {
         &self,
         _view: &Self::View,
         appearance: &Appearance,
-        _app: &AppContext,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let ui_builder = appearance.ui_builder();
 
         let message = Container::new(
             Text::new_inline(
-                "To use Warp Drive, please create an account.".to_string(),
+                localized_settings_text("To use Warp Drive, please create an account.", app)
+                    .to_string(),
                 appearance.ui_font_family(),
                 14.,
             )
@@ -171,7 +177,7 @@ impl SettingsWidget for WarpDriveHeaderWidget {
                     }),
                     ..Default::default()
                 })
-                .with_text_label("Sign up".to_owned())
+                .with_text_label(localized_for_app(UiStringKey::SettingsAccountSignUp, app).into())
                 .build()
                 .on_click(move |ctx, _, _| {
                     ctx.dispatch_typed_action(WarpDriveSettingsPageAction::SignUp);
@@ -248,7 +254,7 @@ impl SettingsWidget for WarpDriveToggleWidget {
                     }
                 })
                 .finish(),
-            Some("Warp Drive is a workspace in your terminal where you can save Workflows, Notebooks, Prompts, and Environment Variables for personal use or to share with a team.".into()),
+            Some(localized_settings_text("Warp Drive is a workspace in your terminal where you can save Workflows, Notebooks, Prompts, and Environment Variables for personal use or to share with a team.", app).into()),
         )
     }
 }

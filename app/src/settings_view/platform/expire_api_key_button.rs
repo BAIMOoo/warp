@@ -5,6 +5,7 @@ use warpui::{
     Entity, SingletonEntity, TypedActionView, View, ViewContext,
 };
 
+use crate::localization::localized_settings_text;
 use crate::ui_components::{buttons::icon_button, icons::Icon};
 
 #[derive(PartialEq, Eq)]
@@ -73,7 +74,11 @@ impl ExpireApiKeyButton {
                 | Err(_) => {
                     me.request_state = RequestState::Idle;
                     ctx.emit(ExpireApiKeyButtonEvent::ExpireApiKeyFailed {
-                        message: "Failed to delete API key. Please try again.".to_string(),
+                        message: localized_settings_text(
+                            "Failed to delete API key. Please try again.",
+                            ctx,
+                        )
+                        .to_string(),
                     });
                     ctx.notify();
                 }

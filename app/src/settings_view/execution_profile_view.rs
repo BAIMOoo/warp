@@ -8,7 +8,8 @@ use crate::ai::execution_profiles::{
 use crate::ai::llms::LLMPreferences;
 use crate::appearance::Appearance;
 use crate::cloud_object::model::generic_string_model::StringModel;
-use crate::settings::AISettings;
+use crate::localization::localized_settings_text;
+use crate::settings::{AISettings, AppLocalizationSettings};
 use crate::ui_components::icons::Icon;
 use crate::view_components::action_button::{ActionButton, ButtonSize, SecondaryTheme};
 use crate::TemplatableMCPServerManager;
@@ -52,8 +53,8 @@ impl ExecutionProfileView {
             ctx.notify();
         });
 
-        let edit_button = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new("Edit", SecondaryTheme)
+        let edit_button = ctx.add_typed_action_view(|ctx| {
+            ActionButton::new(localized_settings_text("Edit", ctx), SecondaryTheme)
                 .with_icon(Icon::Pencil)
                 .with_size(ButtonSize::Small)
                 .on_click(|ctx| {
@@ -71,6 +72,13 @@ impl ExecutionProfileView {
             let is_any_ai_enabled = AISettings::as_ref(ctx).is_any_ai_enabled(ctx);
             me.edit_button.update(ctx, |button, ctx| {
                 button.set_disabled(!is_any_ai_enabled, ctx);
+            });
+            ctx.notify();
+        });
+
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.edit_button.update(ctx, |button, ctx| {
+                button.set_label(localized_settings_text("Edit", ctx), ctx);
             });
             ctx.notify();
         });
@@ -150,9 +158,13 @@ impl View for ExecutionProfileView {
                     let mut model_flex = Flex::column();
                     model_flex.add_child(
                         Container::new(
-                            Text::new("MODELS", appearance.ui_font_family(), 10.)
-                                .with_color(appearance.theme().disabled_ui_text_color().into())
-                                .finish(),
+                            Text::new(
+                                localized_settings_text("MODELS", app),
+                                appearance.ui_font_family(),
+                                10.,
+                            )
+                            .with_color(appearance.theme().disabled_ui_text_color().into())
+                            .finish(),
                         )
                         .with_margin_bottom(8.)
                         .finish(),
@@ -163,6 +175,7 @@ impl View for ExecutionProfileView {
                             "Base model:",
                             base_model,
                             appearance,
+                            app,
                             is_any_ai_enabled,
                         ),
                     ));
@@ -172,6 +185,7 @@ impl View for ExecutionProfileView {
                             "Full terminal use:",
                             cli_agent_model,
                             appearance,
+                            app,
                             is_any_ai_enabled,
                         ),
                     ));
@@ -182,6 +196,7 @@ impl View for ExecutionProfileView {
                                 "Computer use:",
                                 computer_use_model,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -196,11 +211,13 @@ impl View for ExecutionProfileView {
                         let mut permissions_column = Flex::column()
                             .with_child(
                                 Container::new(
-                                    Text::new("PERMISSIONS", appearance.ui_font_family(), 10.)
-                                        .with_color(
-                                            appearance.theme().disabled_ui_text_color().into(),
-                                        )
-                                        .finish(),
+                                    Text::new(
+                                        localized_settings_text("PERMISSIONS", app),
+                                        appearance.ui_font_family(),
+                                        10.,
+                                    )
+                                    .with_color(appearance.theme().disabled_ui_text_color().into())
+                                    .finish(),
                                 )
                                 .with_margin_bottom(8.)
                                 .finish(),
@@ -211,6 +228,7 @@ impl View for ExecutionProfileView {
                                     "Apply code diffs:",
                                     &profile.apply_code_diffs,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ),
                             ))
@@ -220,6 +238,7 @@ impl View for ExecutionProfileView {
                                     "Read files:",
                                     &profile.read_files,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ),
                             ));
@@ -230,6 +249,7 @@ impl View for ExecutionProfileView {
                             permissions_column.add_child(render_directory_allowlist(
                                 &profile,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ));
                         }
@@ -240,6 +260,7 @@ impl View for ExecutionProfileView {
                                 "Execute commands:",
                                 &profile.execute_commands,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -249,6 +270,7 @@ impl View for ExecutionProfileView {
                                 permissions_column.add_child(render_command_denylist(
                                     &profile,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ));
                             }
@@ -256,6 +278,7 @@ impl View for ExecutionProfileView {
                                 permissions_column.add_child(render_command_allowlist(
                                     &profile,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ));
                             }
@@ -263,11 +286,13 @@ impl View for ExecutionProfileView {
                                 permissions_column.add_child(render_command_allowlist(
                                     &profile,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ));
                                 permissions_column.add_child(render_command_denylist(
                                     &profile,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ));
                             }
@@ -279,6 +304,7 @@ impl View for ExecutionProfileView {
                                 "Interact with running commands:",
                                 &profile.write_to_pty,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -290,6 +316,7 @@ impl View for ExecutionProfileView {
                                     "Computer use:",
                                     &profile.computer_use,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ),
                             ));
@@ -301,6 +328,7 @@ impl View for ExecutionProfileView {
                                 "Ask questions:",
                                 &profile.ask_user_question,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -311,6 +339,7 @@ impl View for ExecutionProfileView {
                                 "Call MCP servers:",
                                 &profile.mcp_permissions,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -355,6 +384,7 @@ impl View for ExecutionProfileView {
                                     "Call web tools:",
                                     profile.web_search_enabled,
                                     appearance,
+                                    app,
                                     is_any_ai_enabled,
                                 ),
                             ));
@@ -366,6 +396,7 @@ impl View for ExecutionProfileView {
                                 "Auto-sync plans to Warp Drive:",
                                 profile.autosync_plans_to_warp_drive,
                                 appearance,
+                                app,
                                 is_any_ai_enabled,
                             ),
                         ));
@@ -406,6 +437,7 @@ impl TypedActionView for ExecutionProfileView {
 fn render_chips_row<I, S>(
     items: I,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element>
 where
@@ -415,9 +447,13 @@ where
     let items_vec: Vec<String> = items.into_iter().map(|item| item.to_string()).collect();
     if items_vec.is_empty() {
         return Container::new(
-            Text::new("None", appearance.ui_font_family(), 12.)
-                .with_color(appearance.theme().disabled_ui_text_color().into())
-                .finish(),
+            Text::new(
+                localized_settings_text("None", app),
+                appearance.ui_font_family(),
+                12.,
+            )
+            .with_color(appearance.theme().disabled_ui_text_color().into())
+            .finish(),
         )
         .finish();
     }
@@ -459,9 +495,10 @@ where
 
 fn render_allowlist_denylist_row(
     icon: Icon,
-    label: String,
+    label: &'static str,
     items: &[String],
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     Container::new(
@@ -488,22 +525,27 @@ fn render_allowlist_denylist_row(
             )
             .with_child(
                 Container::new(
-                    Text::new(label, appearance.ui_font_family(), 12.)
-                        .with_color(if is_ai_enabled {
-                            appearance
-                                .theme()
-                                .sub_text_color(appearance.theme().surface_1())
-                                .into()
-                        } else {
-                            appearance.theme().disabled_ui_text_color().into()
-                        })
-                        .finish(),
+                    Text::new(
+                        localized_settings_text(label, app),
+                        appearance.ui_font_family(),
+                        12.,
+                    )
+                    .with_color(if is_ai_enabled {
+                        appearance
+                            .theme()
+                            .sub_text_color(appearance.theme().surface_1())
+                            .into()
+                    } else {
+                        appearance.theme().disabled_ui_text_color().into()
+                    })
+                    .finish(),
                 )
                 .with_margin_right(8.)
                 .finish(),
             )
             .with_child(
-                Shrinkable::new(1., render_chips_row(items, appearance, is_ai_enabled)).finish(),
+                Shrinkable::new(1., render_chips_row(items, appearance, app, is_ai_enabled))
+                    .finish(),
             )
             .finish(),
     )
@@ -515,29 +557,31 @@ fn render_allowlist_denylist_row(
 
 fn render_pathbuf_allowlist_row(
     icon: Icon,
-    label: String,
+    label: &'static str,
     items: &[PathBuf],
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let items_str: Vec<String> = items.iter().map(|p| p.display().to_string()).collect();
-    render_allowlist_denylist_row(icon, label, &items_str, appearance, is_ai_enabled)
+    render_allowlist_denylist_row(icon, label, &items_str, appearance, app, is_ai_enabled)
 }
 
 fn render_command_predicate_row(
     icon: Icon,
-    label: String,
+    label: &'static str,
     items: &[crate::settings::AgentModeCommandExecutionPredicate],
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let items_str: Vec<String> = items.iter().map(|c| c.to_string()).collect();
-    render_allowlist_denylist_row(icon, label, &items_str, appearance, is_ai_enabled)
+    render_allowlist_denylist_row(icon, label, &items_str, appearance, app, is_ai_enabled)
 }
 
 fn render_mcp_uuid_row(
     icon: Icon,
-    label: String,
+    label: &'static str,
     uuids: &[Uuid],
     appearance: &Appearance,
     app: &AppContext,
@@ -547,7 +591,7 @@ fn render_mcp_uuid_row(
         .iter()
         .filter_map(|uuid| TemplatableMCPServerManager::get_mcp_name(uuid, app))
         .collect();
-    render_allowlist_denylist_row(icon, label, &items_str, appearance, is_ai_enabled)
+    render_allowlist_denylist_row(icon, label, &items_str, appearance, app, is_ai_enabled)
 }
 
 fn with_standard_vertical_margin(element: Box<dyn Element>) -> Box<dyn Element> {
@@ -559,12 +603,12 @@ fn with_standard_vertical_margin(element: Box<dyn Element>) -> Box<dyn Element> 
 
 fn render_model_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     model_name: impl Into<String>,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
-    let label = label.into();
     let model_name = model_name.into();
 
     Container::new(
@@ -591,16 +635,20 @@ fn render_model_line_with_icon(
             )
             .with_child(
                 Container::new(
-                    Text::new(label, appearance.ui_font_family(), 12.)
-                        .with_color(if is_ai_enabled {
-                            appearance
-                                .theme()
-                                .sub_text_color(appearance.theme().surface_1())
-                                .into()
-                        } else {
-                            appearance.theme().disabled_ui_text_color().into()
-                        })
-                        .finish(),
+                    Text::new(
+                        localized_settings_text(label, app),
+                        appearance.ui_font_family(),
+                        12.,
+                    )
+                    .with_color(if is_ai_enabled {
+                        appearance
+                            .theme()
+                            .sub_text_color(appearance.theme().surface_1())
+                            .into()
+                    } else {
+                        appearance.theme().disabled_ui_text_color().into()
+                    })
+                    .finish(),
                 )
                 .with_margin_right(8.)
                 .finish(),
@@ -621,14 +669,12 @@ fn render_model_line_with_icon(
 
 fn render_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
-    permission_text: impl Into<String>,
+    label: &'static str,
+    permission_text: &'static str,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
-    let label = label.into();
-    let permission_text = permission_text.into();
-
     Flex::row()
         .with_cross_axis_alignment(CrossAxisAlignment::Center)
         .with_child(
@@ -652,37 +698,46 @@ fn render_permission_line_with_icon(
         )
         .with_child(
             Container::new(
-                Text::new(label, appearance.ui_font_family(), 12.)
-                    .with_color(if is_ai_enabled {
-                        appearance
-                            .theme()
-                            .sub_text_color(appearance.theme().surface_1())
-                            .into()
-                    } else {
-                        appearance.theme().disabled_ui_text_color().into()
-                    })
-                    .finish(),
+                Text::new(
+                    localized_settings_text(label, app),
+                    appearance.ui_font_family(),
+                    12.,
+                )
+                .with_color(if is_ai_enabled {
+                    appearance
+                        .theme()
+                        .sub_text_color(appearance.theme().surface_1())
+                        .into()
+                } else {
+                    appearance.theme().disabled_ui_text_color().into()
+                })
+                .finish(),
             )
             .with_margin_right(8.)
             .finish(),
         )
         .with_child(
-            Text::new(permission_text, appearance.ui_font_family(), 12.)
-                .with_color(if is_ai_enabled {
-                    appearance.theme().active_ui_text_color().into()
-                } else {
-                    appearance.theme().disabled_ui_text_color().into()
-                })
-                .finish(),
+            Text::new(
+                localized_settings_text(permission_text, app),
+                appearance.ui_font_family(),
+                12.,
+            )
+            .with_color(if is_ai_enabled {
+                appearance.theme().active_ui_text_color().into()
+            } else {
+                appearance.theme().disabled_ui_text_color().into()
+            })
+            .finish(),
         )
         .finish()
 }
 
 fn render_action_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     permission: &ActionPermission,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let permission_text = match permission {
@@ -691,14 +746,15 @@ fn render_action_permission_line_with_icon(
         ActionPermission::AlwaysAsk => "Always ask",
         ActionPermission::Unknown => "Unknown",
     };
-    render_permission_line_with_icon(icon, label, permission_text, appearance, is_ai_enabled)
+    render_permission_line_with_icon(icon, label, permission_text, appearance, app, is_ai_enabled)
 }
 
 fn render_write_to_pty_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     permission: &WriteToPtyPermission,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let permission_text = match permission {
@@ -707,14 +763,15 @@ fn render_write_to_pty_permission_line_with_icon(
         WriteToPtyPermission::AskOnFirstWrite => "Ask on first write",
         WriteToPtyPermission::Unknown => "Unknown",
     };
-    render_permission_line_with_icon(icon, label, permission_text, appearance, is_ai_enabled)
+    render_permission_line_with_icon(icon, label, permission_text, appearance, app, is_ai_enabled)
 }
 
 fn render_computer_use_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     permission: &crate::ai::execution_profiles::ComputerUsePermission,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let permission_text = match permission {
@@ -723,14 +780,15 @@ fn render_computer_use_permission_line_with_icon(
         crate::ai::execution_profiles::ComputerUsePermission::AlwaysAsk => "Always ask",
         crate::ai::execution_profiles::ComputerUsePermission::AlwaysAllow => "Always allow",
     };
-    render_permission_line_with_icon(icon, label, permission_text, appearance, is_ai_enabled)
+    render_permission_line_with_icon(icon, label, permission_text, appearance, app, is_ai_enabled)
 }
 
 fn render_ask_user_question_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     permission: &AskUserQuestionPermission,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let permission_text = match permission {
@@ -740,30 +798,33 @@ fn render_ask_user_question_permission_line_with_icon(
         }
         AskUserQuestionPermission::AlwaysAsk => "Always ask",
     };
-    render_permission_line_with_icon(icon, label, permission_text, appearance, is_ai_enabled)
+    render_permission_line_with_icon(icon, label, permission_text, appearance, app, is_ai_enabled)
 }
 
 fn render_bool_permission_line_with_icon(
     icon: Icon,
-    label: impl Into<String>,
+    label: &'static str,
     enabled: bool,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     let permission_text = if enabled { "On" } else { "Off" };
-    render_permission_line_with_icon(icon, label, permission_text, appearance, is_ai_enabled)
+    render_permission_line_with_icon(icon, label, permission_text, appearance, app, is_ai_enabled)
 }
 
 fn render_directory_allowlist(
     profile: &crate::ai::execution_profiles::AIExecutionProfile,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     with_standard_vertical_margin(render_pathbuf_allowlist_row(
         Icon::Check,
-        "Directory allowlist:".to_string(),
+        "Directory allowlist:",
         &profile.directory_allowlist,
         appearance,
+        app,
         is_ai_enabled,
     ))
 }
@@ -771,13 +832,15 @@ fn render_directory_allowlist(
 fn render_command_allowlist(
     profile: &crate::ai::execution_profiles::AIExecutionProfile,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     with_standard_vertical_margin(render_command_predicate_row(
         Icon::Check,
-        "Command allowlist:".to_string(),
+        "Command allowlist:",
         &profile.command_allowlist,
         appearance,
+        app,
         is_ai_enabled,
     ))
 }
@@ -785,13 +848,15 @@ fn render_command_allowlist(
 fn render_command_denylist(
     profile: &crate::ai::execution_profiles::AIExecutionProfile,
     appearance: &Appearance,
+    app: &AppContext,
     is_ai_enabled: bool,
 ) -> Box<dyn Element> {
     with_standard_vertical_margin(render_command_predicate_row(
         Icon::SlashCircle,
-        "Command denylist:".to_string(),
+        "Command denylist:",
         &profile.command_denylist,
         appearance,
+        app,
         is_ai_enabled,
     ))
 }
@@ -804,7 +869,7 @@ fn render_mcp_allowlist(
 ) -> Box<dyn Element> {
     with_standard_vertical_margin(render_mcp_uuid_row(
         Icon::Check,
-        "MCP allowlist:".to_string(),
+        "MCP allowlist:",
         &profile.mcp_allowlist,
         appearance,
         app,
@@ -820,7 +885,7 @@ fn render_mcp_denylist(
 ) -> Box<dyn Element> {
     with_standard_vertical_margin(render_mcp_uuid_row(
         Icon::SlashCircle,
-        "MCP denylist:".to_string(),
+        "MCP denylist:",
         &profile.mcp_denylist,
         appearance,
         app,

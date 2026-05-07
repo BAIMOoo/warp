@@ -6,7 +6,11 @@ use warpui::{
 
 use crate::{
     appearance::Appearance,
+    localization::{
+        localized_delete_environment_confirmation_description, localized_for_app, UiStringKey,
+    },
     server::ids::SyncId,
+    settings::AppLocalizationSettings,
     ui_components::dialog::{dialog_styles, Dialog},
     view_components::action_button::{ActionButton, DangerPrimaryTheme, NakedTheme},
 };
@@ -35,24 +39,31 @@ pub struct DeleteEnvironmentConfirmationDialog {
 impl DeleteEnvironmentConfirmationDialog {
     pub fn new(ctx: &mut ViewContext<Self>) -> Self {
         let cancel_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new("Cancel", NakedTheme).on_click(|ctx| {
+            ActionButton::new("", NakedTheme).on_click(|ctx| {
                 ctx.dispatch_typed_action(DeleteEnvironmentConfirmationDialogAction::Cancel);
             })
         });
 
         let confirm_button = ctx.add_typed_action_view(|_| {
-            ActionButton::new("Delete environment", DangerPrimaryTheme).on_click(|ctx| {
+            ActionButton::new("", DangerPrimaryTheme).on_click(|ctx| {
                 ctx.dispatch_typed_action(DeleteEnvironmentConfirmationDialogAction::Confirm);
             })
         });
 
-        Self {
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.update_button_labels(ctx);
+            ctx.notify();
+        });
+
+        let mut dialog = Self {
             visible: false,
             env_id: None,
             env_name: String::new(),
             cancel_button,
             confirm_button,
-        }
+        };
+        dialog.update_button_labels(ctx);
+        dialog
     }
 
     pub fn show(&mut self, env_id: SyncId, env_name: String, ctx: &mut ViewContext<Self>) {
@@ -65,6 +76,21 @@ impl DeleteEnvironmentConfirmationDialog {
     pub fn hide(&mut self, ctx: &mut ViewContext<Self>) {
         self.visible = false;
         ctx.notify();
+    }
+
+    fn update_button_labels(&mut self, ctx: &mut ViewContext<Self>) {
+        self.cancel_button.update(ctx, |button, ctx| {
+            button.set_label(
+                localized_for_app(UiStringKey::SettingsDialogCancel, ctx),
+                ctx,
+            );
+        });
+        self.confirm_button.update(ctx, |button, ctx| {
+            button.set_label(
+                localized_for_app(UiStringKey::SettingsDeleteEnvironmentConfirmButton, ctx),
+                ctx,
+            );
+        });
     }
 }
 
@@ -84,13 +110,11 @@ impl View for DeleteEnvironmentConfirmationDialog {
 
         let appearance = Appearance::as_ref(app);
 
-        let description = format!(
-            "Are you sure you want to remove the {} environment?",
-            self.env_name
-        );
+        let description =
+            localized_delete_environment_confirmation_description(&self.env_name, app);
 
         let dialog = Dialog::new(
-            "Delete environment?".to_string(),
+            localized_for_app(UiStringKey::SettingsDeleteEnvironmentTitle, app).to_string(),
             Some(description),
             dialog_styles(appearance),
         )

@@ -6,6 +6,7 @@ use crate::ai::persisted_workspace::PersistedWorkspace;
 use crate::auth::AuthStateProvider;
 use crate::default_terminal::DefaultTerminal;
 use crate::features::{runtime_flags_menu_items, FeatureFlag};
+use crate::localization::localized_settings_text_for_str;
 use crate::root_view::OpenLaunchConfigArg;
 use crate::server::telemetry::LaunchConfigUiLocation;
 use crate::settings::{
@@ -99,6 +100,7 @@ fn custom_shortcut(action: CustomAction) -> Option<Keystroke> {
 
 fn default_name(action: CustomAction, ctx: &AppContext) -> String {
     ctx.description_for_custom_action(action.into(), bindings::MAC_MENUS_CONTEXT)
+        .map(|name| localized_settings_text_for_str(&name, ctx).into_owned())
         .unwrap_or_else(|| {
             debug_assert!(false, "action should have a name: {action:?}");
             "<NO DESCRIPTION>".into()
@@ -1170,10 +1172,9 @@ fn custom_action_updater(
             changes.disabled = Some(binding.is_none());
             if let Some(binding) = binding {
                 if let Some(description) = binding.description {
+                    let description = description.resolve(ctx, bindings::MAC_MENUS_CONTEXT);
                     changes.name = Some(
-                        description
-                            .resolve(ctx, bindings::MAC_MENUS_CONTEXT)
-                            .into_owned(),
+                        localized_settings_text_for_str(description.as_ref(), ctx).into_owned(),
                     );
                 }
                 changes.keystroke = Some(bindings::trigger_to_keystroke(binding.trigger));

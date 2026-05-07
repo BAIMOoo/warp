@@ -20,6 +20,7 @@ mod input;
 mod input_mode;
 #[cfg(target_os = "linux")]
 mod linux;
+mod localization;
 pub mod macros;
 pub mod manager;
 pub mod native_preference;
@@ -37,6 +38,8 @@ mod vim_banner;
 #[path = "schema_validation_tests.rs"]
 mod schema_validation_tests;
 
+use crate::localization::localized_settings_text;
+pub use crate::localization::UiLanguage;
 pub use accessibility::*;
 pub use ai::*;
 pub use alias_expansion::*;
@@ -54,6 +57,7 @@ pub use input::*;
 pub use input_mode::*;
 #[cfg(target_os = "linux")]
 pub use linux::*;
+pub use localization::*;
 pub use native_preference::*;
 pub use onboarding::*;
 pub use pane::*;
@@ -112,6 +116,49 @@ impl SettingsFileError {
                 ),
             },
         }
+    }
+
+    /// Returns the localized user-facing `(heading, description)` pair used to
+    /// present this error in app UI. Dynamic settings keys are preserved.
+    pub fn localized_heading_and_description(&self, app: &AppContext) -> (String, String) {
+        if *AppLocalizationSettings::as_ref(app).selected_ui_language == UiLanguage::English {
+            return self.heading_and_description();
+        }
+
+        let description = match self {
+            Self::FileParseFailed(_) => format!(
+                "{}。{}",
+                localized_settings_text("Couldn't parse due to invalid syntax", app),
+                localized_settings_text("Open the file to fix it.", app)
+            ),
+            Self::InvalidSettings(keys) => match keys.as_slice() {
+                [key] => format!(
+                    "{}{}。{}",
+                    localized_settings_text("Invalid value for", app),
+                    key,
+                    localized_settings_text("The default value is being used.", app)
+                ),
+                _ => format!(
+                    "{}{}。{}",
+                    localized_settings_text("Invalid values for:", app),
+                    keys.join(", "),
+                    localized_settings_text("Default values are being used.", app)
+                ),
+            },
+        };
+
+        let heading = localized_settings_text(
+            match self {
+                Self::InvalidSettings(keys) if keys.len() > 1 => {
+                    "Your settings file contains errors."
+                }
+                _ => "Your settings file contains an error.",
+            },
+            app,
+        )
+        .to_owned();
+
+        (heading, description)
     }
 }
 

@@ -4,7 +4,14 @@ use std::path::{Path, PathBuf};
 use warp_core::ui::theme::AnsiColorIdentifier;
 
 use super::compute_candidate_paths;
-use crate::workspace::tab_settings::{DirectoryTabColor, DirectoryTabColors};
+use crate::{
+    localization::{localized_settings_text, UiLanguage},
+    settings::AppLocalizationSettings,
+    test_util::settings::initialize_settings_for_tests,
+    workspace::tab_settings::{DirectoryTabColor, DirectoryTabColors},
+};
+use settings::Setting;
+use warpui::{App, SingletonEntity};
 
 fn colors(entries: &[(&str, DirectoryTabColor)]) -> DirectoryTabColors {
     let map: HashMap<String, DirectoryTabColor> = entries
@@ -134,4 +141,29 @@ fn test_empty_inputs_produce_empty_output() {
     );
 
     assert!(candidates.is_empty());
+}
+
+#[test]
+fn test_static_copy_resolves_to_simplified_chinese() {
+    App::test((), |mut app| async move {
+        initialize_settings_for_tests(&mut app);
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+
+            assert_eq!(
+                localized_settings_text("Add directory color", ctx),
+                "添加目录颜色"
+            );
+            assert_eq!(
+                localized_settings_text("+ Add directory…", ctx),
+                "+ 添加目录…"
+            );
+        });
+    })
 }

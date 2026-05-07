@@ -1,7 +1,74 @@
 use super::*;
+use crate::appearance::Appearance;
+use crate::localization::{localized, UiLanguage};
+use crate::settings::AppLocalizationSettings;
+use crate::test_util::settings::initialize_settings_for_tests;
+use settings::Setting;
 use settings_page::MatchData;
+use warpui::{App, SingletonEntity};
 
 // ── SettingsSection classification ──────────────────────────────────────────
+
+#[test]
+fn settings_section_labels_have_chinese_translations() {
+    assert_eq!(
+        localized(
+            SettingsSection::Account.label_key(),
+            UiLanguage::ChineseSimplified
+        ),
+        "账户"
+    );
+    assert_eq!(
+        localized(
+            SettingsSection::BillingAndUsage.label_key(),
+            UiLanguage::ChineseSimplified
+        ),
+        "账单与用量"
+    );
+    assert_eq!(
+        localized(
+            SettingsSection::Keybindings.label_key(),
+            UiLanguage::ChineseSimplified
+        ),
+        "键盘快捷键"
+    );
+}
+
+#[test]
+fn settings_section_labels_resolve_after_language_hot_switch() {
+    App::test((), |mut app| async move {
+        initialize_settings_for_tests(&mut app);
+        app.add_singleton_model(|_| Appearance::mock());
+
+        app.read(|ctx| {
+            assert_eq!(SettingsSection::Account.localized_label(ctx), "Account");
+        });
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+        });
+        app.read(|ctx| {
+            assert_eq!(SettingsSection::Account.localized_label(ctx), "账户");
+        });
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::English, ctx)
+                    .unwrap();
+            });
+        });
+        app.read(|ctx| {
+            assert_eq!(SettingsSection::Account.localized_label(ctx), "Account");
+        });
+    });
+}
 
 #[test]
 fn ai_subpages_are_identified() {

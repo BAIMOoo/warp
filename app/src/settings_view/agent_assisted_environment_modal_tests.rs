@@ -1,9 +1,12 @@
 use super::*;
 
+use crate::localization::UiLanguage;
 use crate::server::server_api::ServerApiProvider;
+use crate::settings::AppLocalizationSettings;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspace::ToastStack;
 use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
+use settings::Setting;
 use std::path::PathBuf;
 use warp_core::ui::appearance::Appearance;
 use warpui::elements::{ChildView, Empty};
@@ -119,7 +122,7 @@ fn test_modal_show_renders_expected_copy_with_empty_repos_message() {
             let modal = harness.modal();
             let modal = modal.as_ref(ctx);
 
-            let selected_section = modal.render_selected_section(appearance);
+            let selected_section = modal.render_selected_section(appearance, ctx);
             let selected_text = selected_section.debug_text_content().unwrap_or_default();
             assert!(
                 selected_text.contains("Selected repos"),
@@ -132,7 +135,7 @@ fn test_modal_show_renders_expected_copy_with_empty_repos_message() {
                 selected_text
             );
 
-            let available_section = modal.render_available_section(appearance);
+            let available_section = modal.render_available_section(appearance, ctx);
             let available_text = available_section.debug_text_content().unwrap_or_default();
             assert!(
                 available_text.contains("Available indexed repos"),
@@ -359,6 +362,63 @@ fn test_modal_directory_picked_rejects_non_repos() {
                 assert!(modal.selected_repo_paths.is_empty());
                 assert!(modal.selected_row_mouse_states.is_empty());
             });
+        });
+    })
+}
+
+#[test]
+fn test_modal_sections_render_simplified_chinese_copy() {
+    App::test((), |mut app| async move {
+        init_modal_test_models(&mut app);
+
+        let (_window_id, harness) = app.add_window(WindowStyle::NotStealFocus, ModalHarness::new);
+
+        harness.update(&mut app, |harness, ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+
+            let modal = harness.modal();
+            modal.update(ctx, |modal, ctx| {
+                modal.show(ctx);
+                modal.stop_available_repos_loading();
+                modal.available_repos.clear();
+            });
+        });
+
+        harness.read(&app, |harness, ctx| {
+            let appearance = Appearance::as_ref(ctx);
+            let modal = harness.modal();
+            let modal = modal.as_ref(ctx);
+
+            let selected_text = modal
+                .render_selected_section(appearance, ctx)
+                .debug_text_content()
+                .unwrap_or_default();
+            assert!(
+                selected_text.contains("已选仓库"),
+                "Expected Chinese selected section title: {selected_text}"
+            );
+            assert!(
+                selected_text.contains("尚未选择仓库"),
+                "Expected Chinese selected empty-state message: {selected_text}"
+            );
+
+            let available_text = modal
+                .render_available_section(appearance, ctx)
+                .debug_text_content()
+                .unwrap_or_default();
+            assert!(
+                available_text.contains("可用的已索引仓库"),
+                "Expected Chinese available section title: {available_text}"
+            );
+            assert!(
+                available_text.contains("尚未找到本地已索引仓库"),
+                "Expected Chinese available empty-state message: {available_text}"
+            );
         });
     })
 }

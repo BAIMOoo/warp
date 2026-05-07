@@ -6,17 +6,19 @@ use crate::ai::ambient_agents::github_auth_notifier::GitHubAuthNotifier;
 use crate::ai::cloud_environments::GithubRepo;
 use crate::auth::AuthStateProvider;
 use crate::cloud_object::model::persistence::CloudModel;
+use crate::localization::UiLanguage;
 use crate::network::NetworkStatus;
 use crate::server::ids::{ClientId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::{cloud_objects::update_manager::UpdateManager, sync_queue::SyncQueue};
-use crate::settings::PrivacySettings;
+use crate::settings::{AppLocalizationSettings, PrivacySettings};
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::test_util::settings::initialize_settings_for_tests;
 use crate::workspaces::team::Team;
 use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::workspaces::workspace::Workspace;
+use settings::Setting;
 use url::Url;
 use warp_core::ui::appearance::Appearance;
 use warpui::elements::{Empty, MouseStateHandle};
@@ -388,7 +390,7 @@ fn test_render_repos_field_loading_state() {
             });
 
             let appearance = Appearance::as_ref(ctx);
-            let element = view_handle.as_ref(ctx).render_repos_field(appearance);
+            let element = view_handle.as_ref(ctx).render_repos_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -418,7 +420,7 @@ fn test_render_repos_field_authed_state() {
             });
 
             let appearance = Appearance::as_ref(ctx);
-            let element = view_handle.as_ref(ctx).render_repos_field(appearance);
+            let element = view_handle.as_ref(ctx).render_repos_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -451,7 +453,7 @@ fn test_render_repos_field_auth_required() {
             });
 
             let appearance = Appearance::as_ref(ctx);
-            let element = view_handle.as_ref(ctx).render_repos_field(appearance);
+            let element = view_handle.as_ref(ctx).render_repos_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -484,7 +486,7 @@ fn test_render_repos_field_error_state() {
             });
 
             let appearance = Appearance::as_ref(ctx);
-            let element = view_handle.as_ref(ctx).render_repos_field(appearance);
+            let element = view_handle.as_ref(ctx).render_repos_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -524,7 +526,7 @@ fn test_render_repos_field_with_selected_repos() {
             });
 
             let appearance = Appearance::as_ref(ctx);
-            let element = view_handle.as_ref(ctx).render_repos_field(appearance);
+            let element = view_handle.as_ref(ctx).render_repos_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -700,7 +702,7 @@ fn test_render_docker_image_field_shows_suggest_image_button_on_create() {
             let appearance = Appearance::as_ref(ctx);
             let element = view_handle
                 .as_ref(ctx)
-                .render_docker_image_field(appearance);
+                .render_docker_image_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -740,7 +742,7 @@ fn test_render_docker_image_field_shows_suggest_image_button_on_edit() {
             let appearance = Appearance::as_ref(ctx);
             let element = view_handle
                 .as_ref(ctx)
-                .render_docker_image_field(appearance);
+                .render_docker_image_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -775,7 +777,7 @@ fn test_render_docker_image_field_shows_generating_state() {
             let appearance = Appearance::as_ref(ctx);
             let element = view_handle
                 .as_ref(ctx)
-                .render_docker_image_field(appearance);
+                .render_docker_image_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -814,7 +816,7 @@ fn test_render_docker_image_field_shows_custom_image_warning() {
             let appearance = Appearance::as_ref(ctx);
             let element = view_handle
                 .as_ref(ctx)
-                .render_docker_image_field(appearance);
+                .render_docker_image_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -860,7 +862,7 @@ fn test_render_docker_image_field_shows_github_auth_required_message() {
             let appearance = Appearance::as_ref(ctx);
             let element = view_handle
                 .as_ref(ctx)
-                .render_docker_image_field(appearance);
+                .render_docker_image_field(appearance, ctx);
             let text_content = element.debug_text_content().unwrap_or_default();
 
             assert!(
@@ -1071,4 +1073,71 @@ fn test_parse_docker_hub_url_trims_whitespace() {
         UpdateEnvironmentForm::parse_docker_hub_url("  warp/base-image  "),
         Some("https://hub.docker.com/r/warp/base-image".to_string())
     );
+}
+
+#[test]
+fn test_update_environment_form_renders_simplified_chinese_copy() {
+    App::test((), |mut app| async move {
+        init_update_environment_form_test_models(&mut app);
+        let window_id = create_test_window(&mut app);
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+
+            let view_handle = ctx.add_typed_action_view(window_id, |ctx| {
+                UpdateEnvironmentForm::new_for_test(EnvironmentFormInitArgs::Create, ctx)
+            });
+            view_handle.update(ctx, |form, _| {
+                set_github_auth_call_state(form, GithubAuthCallState::Authed);
+            });
+
+            let element = view_handle.as_ref(ctx).render(ctx);
+            let text_content = element.debug_text_content().unwrap_or_default();
+
+            assert!(
+                text_content.contains("创建环境"),
+                "Expected Chinese create title/button in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("名称"),
+                "Expected Chinese name label in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("仓库"),
+                "Expected Chinese repo label/helper in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("Docker 镜像引用"),
+                "Expected Chinese Docker image label in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("建议镜像"),
+                "Expected Chinese suggest-image button in rendered content: {text_content}"
+            );
+            let setup_commands_placeholder = view_handle
+                .as_ref(ctx)
+                .setup_commands_input
+                .as_ref(ctx)
+                .editor()
+                .as_ref(ctx)
+                .placeholder_text("")
+                .map(str::to_string);
+            assert!(
+                setup_commands_placeholder
+                    .as_deref()
+                    .is_some_and(|placeholder| placeholder
+                        == "例如 cd my-repo && pip install -r requirements.txt"),
+                "Expected Chinese setup command placeholder, got {setup_commands_placeholder:?}"
+            );
+            assert!(
+                !text_content.contains("Create environment"),
+                "Did not expect English create title after language switch: {text_content}"
+            );
+        });
+    })
 }

@@ -4,12 +4,13 @@ use crate::ai::cloud_environments::{
     AmbientAgentEnvironment, CloudAmbientAgentEnvironmentModel, GithubRepo,
 };
 use crate::auth::AuthStateProvider;
+use crate::localization::UiLanguage;
 use crate::network::NetworkStatus;
 use crate::root_view::CreateEnvironmentArg;
 use crate::server::ids::{ClientId, ServerId, SyncId};
 use crate::server::server_api::ServerApiProvider;
 use crate::server::{cloud_objects::update_manager::UpdateManager, sync_queue::SyncQueue};
-use crate::settings::PrivacySettings;
+use crate::settings::{AppLocalizationSettings, PrivacySettings};
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::terminal::view::init_environment::mode_selector::EnvironmentSetupModeSelector;
 use crate::test_util::settings::initialize_settings_for_tests;
@@ -17,6 +18,7 @@ use crate::workspaces::team_tester::TeamTesterStatus;
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 use instant::Instant;
+use settings::Setting;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use warp_core::ui::appearance::Appearance;
@@ -86,6 +88,11 @@ fn create_test_window(app: &mut App) -> WindowId {
     window_id
 }
 
+fn init_minimal_environment_render_test_models(app: &mut App) {
+    initialize_settings_for_tests(app);
+    app.add_singleton_model(|_| Appearance::mock());
+}
+
 fn init_env_page_view_test_models(app: &mut App) {
     initialize_settings_for_tests(app);
 
@@ -137,7 +144,7 @@ fn empty_card_mouse_states() -> EmptyMouseStates {
 #[test]
 fn test_render_environments_list_with_single_environment() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -192,7 +199,7 @@ fn test_render_environments_list_with_single_environment() {
 #[test]
 fn test_render_environments_list_with_multiple_environments() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -259,7 +266,7 @@ fn test_render_environments_list_with_multiple_environments() {
 #[test]
 fn test_render_environment_card_with_minimal_config() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -314,7 +321,7 @@ fn test_render_environment_card_with_minimal_config() {
 #[test]
 fn test_render_environment_card_with_github_repos() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -381,7 +388,7 @@ fn test_render_environment_card_with_github_repos() {
 #[test]
 fn test_render_environment_card_with_setup_commands() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -450,7 +457,7 @@ fn test_render_environment_card_with_setup_commands() {
 #[test]
 fn test_render_environment_card_with_all_features() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -535,7 +542,7 @@ fn test_render_environment_card_with_all_features() {
 #[test]
 fn test_render_environment_card_with_empty_setup_commands() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -994,7 +1001,7 @@ fn test_render_empty_state_github_card_unauthed_state_shows_authorize() {
 #[test]
 fn test_environment_setup_mode_selector_renders_options() {
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
         let window_id = create_test_window(&mut app);
 
         app.update(|ctx| {
@@ -1332,7 +1339,7 @@ fn test_render_environment_card_with_last_used_never() {
     use warp_graphql::scalars::time::ServerTimestamp;
 
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -1403,7 +1410,7 @@ fn test_render_environment_card_with_last_used_timestamp() {
     use warp_graphql::scalars::time::ServerTimestamp;
 
     App::test((), |mut app| async move {
-        app.add_singleton_model(|_| Appearance::mock());
+        init_minimal_environment_render_test_models(&mut app);
 
         app.update(|ctx| {
             let appearance = Appearance::as_ref(ctx);
@@ -1469,6 +1476,79 @@ fn test_render_environment_card_with_last_used_timestamp() {
                 text_content.contains("View my runs"),
                 "Expected 'View my runs' link in rendered text: {}",
                 text_content
+            );
+        });
+    })
+}
+
+#[test]
+fn test_environments_list_renders_simplified_chinese_static_copy() {
+    App::test((), |mut app| async move {
+        init_env_page_view_test_models(&mut app);
+        let window_id = create_test_window(&mut app);
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+
+            let environment = AmbientAgentEnvironment::new(
+                "Test Environment".to_string(),
+                Some("Test description".to_string()),
+                vec![GithubRepo::new("owner".to_string(), "repo".to_string())],
+                "ubuntu:latest".to_string(),
+                vec!["npm install".to_string()],
+            );
+
+            let sync_id = SyncId::ClientId(ClientId::new());
+            let object = CloudAmbientAgentEnvironment::new(
+                sync_id,
+                CloudAmbientAgentEnvironmentModel::new(environment),
+                crate::cloud_object::CloudObjectMetadata::mock(),
+                crate::cloud_object::CloudObjectPermissions::mock_personal(),
+            );
+
+            CloudModel::handle(ctx).update(ctx, |model, ctx| {
+                model.create_object(sync_id, object, ctx);
+            });
+
+            let view_handle = ctx.add_typed_action_view(window_id, EnvironmentsPageView::new);
+            let appearance = Appearance::as_ref(ctx);
+            let view = view_handle.as_ref(ctx);
+
+            let element = EnvironmentsPageWidget::render_list_page(view, appearance, ctx);
+            let text_content = element.debug_text_content().unwrap_or_default();
+
+            assert!(
+                text_content.contains("环境用于定义"),
+                "Expected Chinese page description in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("个人"),
+                "Expected Chinese personal section header in rendered content: {text_content}"
+            );
+            assert!(
+                text_content.contains("镜像: ubuntu:latest"),
+                "Expected Chinese image label with dynamic Docker image preserved: {text_content}"
+            );
+            assert!(
+                text_content.contains("仓库: owner/repo"),
+                "Expected Chinese repos label with dynamic repo preserved: {text_content}"
+            );
+            assert!(
+                text_content.contains("设置命令: npm install"),
+                "Expected Chinese setup commands label with command preserved: {text_content}"
+            );
+            assert!(
+                text_content.contains("查看我的运行"),
+                "Expected Chinese View my runs link in rendered content: {text_content}"
+            );
+            assert!(
+                !text_content.contains("View my runs"),
+                "Did not expect English View my runs link after language switch: {text_content}"
             );
         });
     })

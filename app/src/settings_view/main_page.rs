@@ -1,21 +1,23 @@
 use super::{
     flags,
     settings_page::{
-        render_body_item, render_customer_type_badge, AdditionalInfo, LocalOnlyIconState,
-        MatchData, PageType, SettingsPageMeta, SettingsPageViewHandle, SettingsWidget, ToggleState,
-        HEADER_PADDING,
+        render_body_item, render_customer_type_badge, render_dropdown_item, AdditionalInfo,
+        LocalOnlyIconState, MatchData, PageType, SettingsPageMeta, SettingsPageViewHandle,
+        SettingsWidget, ToggleState, HEADER_PADDING,
     },
     SettingsAction, SettingsSection, ToggleSettingActionPair,
 };
 use crate::auth::{AuthStateProvider, UserUid};
 use crate::autoupdate::{self, AutoupdateStage, AutoupdateState};
+use crate::localization::{localized_for_app, UiLanguage, UiStringKey};
 use crate::send_telemetry_from_ctx;
+use crate::view_components::{Dropdown, DropdownItem};
 use crate::workspaces::user_workspaces::UserWorkspaces;
 use crate::{
     appearance::Appearance,
     auth::{auth_state::AuthState, auth_view_modal::AuthViewVariant},
     report_if_error,
-    settings::cloud_preferences::CloudPreferencesSettings,
+    settings::{cloud_preferences::CloudPreferencesSettings, AppLocalizationSettings},
     TelemetryEvent,
 };
 use crate::{auth::auth_manager::AuthManager, server::ids::ServerId};
@@ -56,10 +58,8 @@ use warpui::{
 };
 
 const PHOTO_SIZE: f32 = 40.;
-const REFERRAL_CTA: &str = "Earn rewards by sharing Warp with friends & colleagues";
 const REGULAR_TEXT_FONT_SIZE: f32 = 12.;
 const VERTICAL_MARGIN: f32 = 24.;
-const LOG_OUT_TEXT: &str = "Log out";
 lazy_static! {
     static ref SETTINGS_SYNC_BINDINGS_ADDED: Arc<Mutex<bool>> = Default::default();
 }
@@ -123,6 +123,7 @@ pub enum MainPageAction {
     DownloadUpdate,
     CheckForUpdate,
     ToggleSettingsSync,
+    SetUiLanguage(UiLanguage),
     Upgrade {
         team_uid: Option<ServerId>,
         user_id: UserUid,
@@ -167,6 +168,7 @@ pub enum MainSettingsPageEvent {
 pub struct MainSettingsPageView {
     page: PageType<Self>,
     auth_state: Arc<AuthState>,
+    ui_language_dropdown: ViewHandle<Dropdown<MainPageAction>>,
 }
 
 impl Entity for MainSettingsPageView {
@@ -220,6 +222,12 @@ impl TypedActionView for MainSettingsPageView {
                 );
                 ctx.notify();
             }
+            MainPageAction::SetUiLanguage(language) => {
+                AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    report_if_error!(settings.selected_ui_language.set_value(*language, ctx));
+                });
+                ctx.notify();
+            }
             MainPageAction::Upgrade { team_uid, user_id } => match team_uid {
                 Some(team_uid) => {
                     ctx.open_url(&UserWorkspaces::upgrade_link_for_team(*team_uid));
@@ -267,14 +275,22 @@ impl MainSettingsPageView {
             ctx.notify();
         });
 
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.update_ui_language_dropdown(ctx);
+            ctx.notify();
+        });
+
         let auth_manager_handle = AuthManager::handle(ctx);
         ctx.subscribe_to_model(&auth_manager_handle, |_, _, _, ctx| {
             ctx.notify();
         });
 
+        let ui_language_dropdown = Self::create_ui_language_dropdown(ctx);
+
         let mut widgets: Vec<Box<dyn SettingsWidget<View = Self>>> = vec![
             Box::new(AccountWidget::default()),
             Box::new(DividerWidget {}),
+            Box::new(InterfaceLanguageWidget),
         ];
 
         widgets.push(Box::new(SettingsSyncWidget::default()));
@@ -287,9 +303,18 @@ impl MainSettingsPageView {
 
         widgets.push(Box::new(LogoutWidget::default()));
 
-        let page = PageType::new_uncategorized(widgets, Some("Account"));
+        let page = PageType::new_uncategorized_localized(
+            widgets,
+            Some(UiStringKey::SettingsAccountPageTitle),
+        );
 
-        MainSettingsPageView { page, auth_state }
+        let mut view = MainSettingsPageView {
+            page,
+            auth_state,
+            ui_language_dropdown,
+        };
+        view.update_ui_language_dropdown(ctx);
+        view
     }
 
     fn handle_autoupdate_state_change(
@@ -298,6 +323,36 @@ impl MainSettingsPageView {
         ctx: &mut ViewContext<Self>,
     ) {
         ctx.notify();
+    }
+
+    fn create_ui_language_dropdown(
+        ctx: &mut ViewContext<Self>,
+    ) -> ViewHandle<Dropdown<MainPageAction>> {
+        ctx.add_typed_action_view(|ctx| {
+            let mut dropdown = Dropdown::new(ctx);
+            dropdown.set_top_bar_max_width(190.);
+            dropdown.set_menu_width(190., ctx);
+            dropdown.set_items(
+                UiLanguage::ALL
+                    .iter()
+                    .map(|language| {
+                        DropdownItem::new(
+                            language.display_name(),
+                            MainPageAction::SetUiLanguage(*language),
+                        )
+                    })
+                    .collect(),
+                ctx,
+            );
+            dropdown
+        })
+    }
+
+    fn update_ui_language_dropdown(&mut self, ctx: &mut ViewContext<Self>) {
+        let language = *AppLocalizationSettings::as_ref(ctx).selected_ui_language;
+        self.ui_language_dropdown.update(ctx, |dropdown, ctx| {
+            dropdown.set_selected_by_name(language.display_name(), ctx);
+        });
     }
 }
 
@@ -319,6 +374,7 @@ impl AccountWidget {
         &self,
         auth_state: &AuthState,
         appearance: &Appearance,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let button_styles = UiComponentStyles {
             font_size: Some(14.),
@@ -340,7 +396,7 @@ impl AccountWidget {
                 self.ui_state_handles.anonymous_user_sign_up_button.clone(),
             )
             .with_style(button_styles)
-            .with_text_label("Sign up".to_owned())
+            .with_text_label(localized_for_app(UiStringKey::SettingsAccountSignUp, app).to_owned())
             .build()
             .on_click(move |ctx, _, _| {
                 ctx.dispatch_typed_action(MainPageAction::SignupAnonymousUser);
@@ -352,7 +408,10 @@ impl AccountWidget {
             .with_cross_axis_alignment(CrossAxisAlignment::End);
         let current_user_id = auth_state.user_id().unwrap_or_default();
 
-        plan_info.add_child(render_customer_type_badge(appearance, "Free".into()));
+        plan_info.add_child(render_customer_type_badge(
+            appearance,
+            localized_for_app(UiStringKey::SettingsAccountFreePlan, app).into(),
+        ));
         plan_info.add_child(
             Container::new(
                 appearance
@@ -364,7 +423,7 @@ impl AccountWidget {
                     .with_text_and_icon_label(
                         TextAndIcon::new(
                             TextAndIconAlignment::IconFirst,
-                            "Compare plans",
+                            localized_for_app(UiStringKey::SettingsAccountComparePlans, app),
                             Icon::CoinsStacked.to_warpui_icon(appearance.theme().accent()),
                             MainAxisSize::Min,
                             MainAxisAlignment::Center,
@@ -500,7 +559,8 @@ impl AccountWidget {
                         appearance
                             .ui_builder()
                             .link(
-                                "Contact support".into(),
+                                localized_for_app(UiStringKey::SettingsAccountContactSupport, app)
+                                    .into(),
                                 Some("mailto:support@warp.dev".into()),
                                 None,
                                 self.ui_state_handles.enterprise_contact_us_link.clone(),
@@ -517,7 +577,11 @@ impl AccountWidget {
                             appearance
                                 .ui_builder()
                                 .link(
-                                    "Manage billing".into(),
+                                    localized_for_app(
+                                        UiStringKey::SettingsAccountManageBilling,
+                                        app,
+                                    )
+                                    .into(),
                                     None,
                                     Some(Box::new(move |ctx| {
                                         ctx.dispatch_typed_action(
@@ -538,9 +602,15 @@ impl AccountWidget {
                     // If the team is upgradeable to self-serve tier, show them the upgrade link.
                     if team.billing_metadata.can_upgrade_to_higher_tier_plan() {
                         let description = match team.billing_metadata.customer_type {
-                            CustomerType::Prosumer => "Upgrade to Turbo plan",
-                            CustomerType::Turbo => "Upgrade to Lightspeed plan",
-                            _ => "Compare plans",
+                            CustomerType::Prosumer => localized_for_app(
+                                UiStringKey::SettingsAccountUpgradeToTurboPlan,
+                                app,
+                            ),
+                            CustomerType::Turbo => localized_for_app(
+                                UiStringKey::SettingsAccountUpgradeToLightspeedPlan,
+                                app,
+                            ),
+                            _ => localized_for_app(UiStringKey::SettingsAccountComparePlans, app),
                         };
                         let team_uid = team.uid;
                         plan_info.add_child(
@@ -566,14 +636,17 @@ impl AccountWidget {
                 }
             }
         } else {
-            let plan_badge_child = render_customer_type_badge(appearance, "Free".into());
+            let plan_badge_child = render_customer_type_badge(
+                appearance,
+                localized_for_app(UiStringKey::SettingsAccountFreePlan, app).into(),
+            );
             plan_info.add_child(plan_badge_child);
 
             plan_info.add_child(
                 appearance
                     .ui_builder()
                     .link(
-                        "Compare plans".into(),
+                        localized_for_app(UiStringKey::SettingsAccountComparePlans, app).into(),
                         None,
                         Some(Box::new(move |ctx| {
                             ctx.dispatch_typed_action(MainPageAction::Upgrade {
@@ -608,7 +681,7 @@ impl SettingsWidget for AccountWidget {
     type View = MainSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "account sign up"
+        "account sign up 注册 账户"
     }
 
     fn render(
@@ -618,7 +691,7 @@ impl SettingsWidget for AccountWidget {
         app: &AppContext,
     ) -> Box<dyn Element> {
         let account_info = if view.auth_state.is_anonymous_or_logged_out() {
-            self.render_anonymous_account_info(view.auth_state.as_ref(), appearance)
+            self.render_anonymous_account_info(view.auth_state.as_ref(), appearance, app)
         } else {
             let profile_image_source = view.auth_state.user_photo_url().map(|url| {
                 asset_cache::url_source_with_persistence(url, &warp_core::paths::cache_dir())
@@ -666,6 +739,132 @@ impl SettingsWidget for DividerWidget {
     }
 }
 
+struct InterfaceLanguageWidget;
+
+impl SettingsWidget for InterfaceLanguageWidget {
+    type View = MainSettingsPageView;
+
+    fn search_terms(&self) -> &str {
+        "app language interface language ui language application language 中文 语言 界面 应用语言"
+    }
+
+    fn render(
+        &self,
+        view: &Self::View,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        Container::new(render_dropdown_item(
+            appearance,
+            localized_for_app(UiStringKey::SettingsAccountUiLanguageLabel, app),
+            Some(localized_for_app(
+                UiStringKey::SettingsAccountUiLanguageDescription,
+                app,
+            )),
+            None,
+            LocalOnlyIconState::Hidden,
+            None,
+            &view.ui_language_dropdown,
+        ))
+        .with_margin_top(VERTICAL_MARGIN)
+        .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::server::server_api::ServerApiProvider;
+    use crate::test_util::settings::initialize_settings_for_tests;
+    use crate::view_components::dropdown::DropdownAction;
+    use crate::workspaces::user_workspaces::UserWorkspaces;
+    use warpui::{platform::WindowStyle, App};
+
+    #[test]
+    fn selecting_language_from_dropdown_updates_setting() {
+        App::test((), |mut app| async move {
+            initialize_settings_for_tests(&mut app);
+            app.add_singleton_model(|_| Appearance::mock());
+            app.add_singleton_model(|_| ServerApiProvider::new_for_test());
+            app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+            app.add_singleton_model(AuthManager::new_for_test);
+            app.add_singleton_model(|ctx| {
+                AutoupdateState::new(ServerApiProvider::as_ref(ctx).get())
+            });
+            app.add_singleton_model(UserWorkspaces::default_mock);
+
+            let (window_id, view) =
+                app.add_window(WindowStyle::NotStealFocus, MainSettingsPageView::new);
+            let dropdown = view.read(&app, |view, _| view.ui_language_dropdown.clone());
+
+            app.dispatch_typed_action(
+                window_id,
+                &[view.id(), dropdown.id()],
+                &DropdownAction::SelectActionAndClose(MainPageAction::SetUiLanguage(
+                    UiLanguage::ChineseSimplified,
+                )),
+            );
+
+            let selected_language =
+                app.read(|ctx| *AppLocalizationSettings::as_ref(ctx).selected_ui_language);
+            assert_eq!(selected_language, UiLanguage::ChineseSimplified);
+        });
+    }
+
+    #[test]
+    fn ui_language_dropdown_updates_when_setting_hot_switches() {
+        App::test((), |mut app| async move {
+            initialize_settings_for_tests(&mut app);
+            app.add_singleton_model(|_| Appearance::mock());
+            app.add_singleton_model(|_| ServerApiProvider::new_for_test());
+            app.add_singleton_model(|_| AuthStateProvider::new_for_test());
+            app.add_singleton_model(AuthManager::new_for_test);
+            app.add_singleton_model(|ctx| {
+                AutoupdateState::new(ServerApiProvider::as_ref(ctx).get())
+            });
+            app.add_singleton_model(UserWorkspaces::default_mock);
+
+            let (_window_id, view) =
+                app.add_window(WindowStyle::NotStealFocus, MainSettingsPageView::new);
+            let dropdown = view.read(&app, |view, _| view.ui_language_dropdown.clone());
+
+            let rendered = dropdown
+                .read(&app, |dropdown, app| dropdown.render(app))
+                .debug_text_content()
+                .unwrap_or_default();
+            assert!(rendered.contains("English"));
+
+            app.update(|ctx| {
+                AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    settings
+                        .selected_ui_language
+                        .set_value(UiLanguage::ChineseSimplified, ctx)
+                        .unwrap();
+                });
+            });
+            let rendered = dropdown
+                .read(&app, |dropdown, app| dropdown.render(app))
+                .debug_text_content()
+                .unwrap_or_default();
+            assert!(rendered.contains("中文"));
+
+            app.update(|ctx| {
+                AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    settings
+                        .selected_ui_language
+                        .set_value(UiLanguage::English, ctx)
+                        .unwrap();
+                });
+            });
+            let rendered = dropdown
+                .read(&app, |dropdown, app| dropdown.render(app))
+                .debug_text_content()
+                .unwrap_or_default();
+            assert!(rendered.contains("English"));
+        });
+    }
+}
+
 #[derive(Default)]
 struct SettingsSyncWidget {
     tooltip_state: MouseStateHandle,
@@ -676,7 +875,7 @@ impl SettingsWidget for SettingsSyncWidget {
     type View = MainSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "settings sync"
+        "settings sync 设置同步"
     }
 
     fn should_render(&self, app: &AppContext) -> bool {
@@ -703,7 +902,7 @@ impl SettingsWidget for SettingsSyncWidget {
         };
 
         Container::new(render_body_item::<MainPageAction>(
-            "Settings sync".to_string(),
+            localized_for_app(UiStringKey::SettingsAccountSettingsSync, app).to_string(),
             Some(label_info),
             // Cloud prefs are always synced, so no need to show the local-only icon.
             LocalOnlyIconState::Hidden,
@@ -765,7 +964,7 @@ impl SettingsWidget for EarnRewardsWidget {
     type View = MainSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "earn rewards referral share friends"
+        "earn rewards referral share friends 推荐 奖励 分享 朋友"
     }
 
     fn should_render(&self, app: &AppContext) -> bool {
@@ -778,16 +977,16 @@ impl SettingsWidget for EarnRewardsWidget {
         &self,
         _view: &Self::View,
         appearance: &Appearance,
-        _app: &AppContext,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         Container::new(
             self.render_row(
                 appearance,
-                REFERRAL_CTA,
+                localized_for_app(UiStringKey::SettingsAccountReferralCta, app),
                 appearance
                     .ui_builder()
                     .link(
-                        "Refer a friend".into(),
+                        localized_for_app(UiStringKey::SettingsAccountReferAFriend, app).into(),
                         None,
                         Some(Box::new(move |ctx| {
                             ctx.dispatch_typed_action(WorkspaceAction::ShowReferralSettingsPage);
@@ -823,11 +1022,11 @@ impl VersionInfoWidget {
             .with_opacity(60)
             .into();
         struct StatusContent {
-            text: &'static str,
+            key: UiStringKey,
             color: ColorU,
         }
         struct CallToActionContent {
-            text: &'static str,
+            key: UiStringKey,
             action: MainPageAction,
         }
 
@@ -837,73 +1036,73 @@ impl VersionInfoWidget {
                 match autoupdate::get_update_state(app) {
                     AutoupdateStage::NoUpdateAvailable => (
                         Some(StatusContent {
-                            text: "Up to date",
+                            key: UiStringKey::SettingsAccountVersionUpToDate,
                             color: faded_text_color,
                         }),
                         Some(CallToActionContent {
-                            text: "Check for updates",
+                            key: UiStringKey::SettingsAccountVersionCheckForUpdates,
                             action: MainPageAction::CheckForUpdate,
                         }),
                     ),
                     AutoupdateStage::CheckingForUpdate => (
                         Some(StatusContent {
-                            text: "checking for update...",
+                            key: UiStringKey::SettingsAccountVersionCheckingForUpdate,
                             color: faded_text_color,
                         }),
                         None,
                     ),
                     AutoupdateStage::DownloadingUpdate => (
                         Some(StatusContent {
-                            text: "downloading update...",
+                            key: UiStringKey::SettingsAccountVersionDownloadingUpdate,
                             color: faded_text_color,
                         }),
                         None,
                     ),
                     AutoupdateStage::UpdateReady { .. } => (
                         Some(StatusContent {
-                            text: "Update available",
+                            key: UiStringKey::SettingsAccountVersionUpdateAvailable,
                             color: ansi_red,
                         }),
                         Some(CallToActionContent {
-                            text: "Relaunch Warp",
+                            key: UiStringKey::SettingsAccountVersionRelaunchWarp,
                             action: MainPageAction::Relaunch,
                         }),
                     ),
                     AutoupdateStage::Updating { .. } => (
                         Some(StatusContent {
-                            text: "Updating...",
+                            key: UiStringKey::SettingsAccountVersionUpdating,
                             color: faded_text_color,
                         }),
                         None,
                     ),
                     AutoupdateStage::UpdatedPendingRestart { .. } => (
                         Some(StatusContent {
-                            text: "Installed update",
+                            key: UiStringKey::SettingsAccountVersionInstalledUpdate,
                             color: faded_text_color,
                         }),
                         Some(CallToActionContent {
-                            text: "Relaunch Warp",
+                            key: UiStringKey::SettingsAccountVersionRelaunchWarp,
                             action: MainPageAction::Relaunch,
                         }),
                     ),
                     AutoupdateStage::UnableToUpdateToNewVersion { .. } => (
                         Some(StatusContent {
-                            text: "A new version of Warp is available but can't be installed",
+                            key: UiStringKey::SettingsAccountVersionUnableToInstallUpdate,
                             color: ansi_red,
                         }),
                         Some(CallToActionContent {
-                            text: "Update Warp manually",
+                            key: UiStringKey::SettingsAccountVersionUpdateManually,
                             // note: the handler for this action is a no-op
                             action: MainPageAction::DownloadUpdate,
                         }),
                     ),
                     AutoupdateStage::UnableToLaunchNewVersion { .. } => (
                         Some(StatusContent {
-                            text: "A new version of Warp is installed but can't be launched.",
+                            key: UiStringKey::SettingsAccountVersionUnableToLaunchUpdate,
                             color: ansi_red,
                         }),
                         Some(CallToActionContent {
-                            text: "Update Warp manually",
+                            key: UiStringKey::SettingsAccountVersionUpdateManually,
                             // note: the handler for this action is a no-op
                             action: MainPageAction::DownloadUpdate,
                         }),
@@ -920,7 +1119,8 @@ impl VersionInfoWidget {
                     1.0,
                     Align::new(
                         Text::new_inline(
-                            "Version".to_string(),
+                            localized_for_app(UiStringKey::SettingsAccountVersionLabel, app)
+                                .to_string(),
                             appearance.ui_font_family(),
                             REGULAR_TEXT_FONT_SIZE,
                         )
@@ -937,7 +1137,7 @@ impl VersionInfoWidget {
                 appearance
                     .ui_builder()
                     .link(
-                        call_to_action_content.text.into(),
+                        localized_for_app(call_to_action_content.key, app).into(),
                         None,
                         Some(Box::new(move |ctx| {
                             ctx.dispatch_typed_action(call_to_action_content.action.clone());
@@ -994,7 +1194,7 @@ impl VersionInfoWidget {
         if let Some(status_content) = status_content {
             second_row.add_child(
                 Text::new_inline(
-                    status_content.text.to_string(),
+                    localized_for_app(status_content.key, app).to_string(),
                     appearance.ui_font_family(),
                     REGULAR_TEXT_FONT_SIZE,
                 )
@@ -1044,11 +1244,11 @@ struct LogoutWidget {
 }
 
 impl LogoutWidget {
-    fn render_logout_button(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_logout_button(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         appearance
             .ui_builder()
             .button(ButtonVariant::Secondary, self.mouse_state.clone())
-            .with_text_label(LOG_OUT_TEXT.into())
+            .with_text_label(localized_for_app(UiStringKey::SettingsAccountLogOut, app).into())
             .with_style(UiComponentStyles {
                 font_size: Some(14.),
                 padding: Some(Coords::uniform(8.).left(32.).right(32.)),
@@ -1066,7 +1266,7 @@ impl SettingsWidget for LogoutWidget {
     type View = MainSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "sign out log out logout"
+        "sign out log out logout 退出登录"
     }
 
     fn should_render(&self, app: &AppContext) -> bool {
@@ -1079,10 +1279,10 @@ impl SettingsWidget for LogoutWidget {
         &self,
         _view: &Self::View,
         appearance: &Appearance,
-        _app: &AppContext,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         Container::new(
-            Align::new(self.render_logout_button(appearance))
+            Align::new(self.render_logout_button(appearance, app))
                 .left()
                 .finish(),
         )

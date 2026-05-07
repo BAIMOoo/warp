@@ -10,7 +10,9 @@ use warpui::{
     ViewContext, ViewHandle, WeakViewHandle,
 };
 
-use crate::editor::EditorView;
+use crate::{
+    editor::EditorView, localization::localized_settings_text, settings::AppLocalizationSettings,
+};
 
 use super::EnvironmentsPageAction;
 
@@ -27,6 +29,9 @@ pub enum NewEnvironmentButtonAction {
 
 impl NewEnvironmentButtonView {
     pub fn new(search_editor: ViewHandle<EditorView>, ctx: &mut ViewContext<Self>) -> Self {
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |_, _, _, ctx| {
+            ctx.notify();
+        });
         Self {
             trigger_mouse_state: Default::default(),
             search_editor,
@@ -97,7 +102,7 @@ impl View for NewEnvironmentButtonView {
                     .with_spacing(4.)
                     .with_child(
                         Text::new(
-                            "New environment",
+                            localized_settings_text("New environment", app),
                             appearance.ui_font_family(),
                             appearance.ui_font_size(),
                         )

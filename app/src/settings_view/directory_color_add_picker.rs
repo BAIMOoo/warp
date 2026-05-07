@@ -18,6 +18,8 @@ use warpui::{
 use crate::{
     ai::persisted_workspace::{PersistedWorkspace, PersistedWorkspaceEvent},
     appearance::Appearance,
+    localization::localized_settings_text,
+    settings::AppLocalizationSettings,
     ui_components::icons,
     view_components::action_button::{ActionButton, SecondaryTheme},
     view_components::{DropdownItem, FilterableDropdown},
@@ -109,8 +111,13 @@ impl DirectoryColorAddPicker {
             }
         });
 
-        let button = ctx.add_typed_action_view(|_ctx| {
-            ActionButton::new(BUTTON_LABEL, SecondaryTheme)
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.refresh_localized_copy(ctx);
+            ctx.notify();
+        });
+
+        let button = ctx.add_typed_action_view(|ctx| {
+            ActionButton::new(localized_settings_text(BUTTON_LABEL, ctx), SecondaryTheme)
                 .with_icon(icons::Icon::Plus)
                 .on_click(|ctx| {
                     ctx.dispatch_typed_action(DirectoryColorAddPickerAction::AddNewDirectory);
@@ -121,7 +128,7 @@ impl DirectoryColorAddPicker {
             let mut dropdown = FilterableDropdown::new(ctx);
             dropdown.set_top_bar_max_width(MENU_WIDTH);
             dropdown.set_menu_width(MENU_WIDTH, ctx);
-            dropdown.set_menu_header_to_static(BUTTON_LABEL);
+            dropdown.set_menu_header_to_static(localized_settings_text(BUTTON_LABEL, ctx));
             dropdown
         });
 
@@ -158,7 +165,7 @@ impl DirectoryColorAddPicker {
                                     .with_cross_axis_alignment(CrossAxisAlignment::Center)
                                     .with_child(
                                         Text::new_inline(
-                                            ADD_DIRECTORY_LABEL,
+                                            localized_settings_text(ADD_DIRECTORY_LABEL, app),
                                             font_family,
                                             font_size,
                                         )
@@ -188,6 +195,16 @@ impl DirectoryColorAddPicker {
 
         picker.refresh_items(ctx);
         picker
+    }
+
+    fn refresh_localized_copy(&mut self, ctx: &mut ViewContext<Self>) {
+        self.button.update(ctx, |button, ctx| {
+            button.set_label(localized_settings_text(BUTTON_LABEL, ctx), ctx);
+        });
+        self.dropdown.update(ctx, |dropdown, ctx| {
+            dropdown.set_menu_header_to_static(localized_settings_text(BUTTON_LABEL, ctx));
+            ctx.notify();
+        });
     }
 
     fn refresh_items(&mut self, ctx: &mut ViewContext<Self>) {

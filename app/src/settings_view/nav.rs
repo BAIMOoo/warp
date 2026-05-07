@@ -1,4 +1,5 @@
 use crate::appearance::Appearance;
+use crate::localization::{LocalizedText, UiStringKey};
 use crate::ui_components::icons::Icon;
 use pathfinder_geometry::vector::vec2f;
 use warpui::{
@@ -7,6 +8,7 @@ use warpui::{
         button::{ButtonVariant, TextAndIcon, TextAndIconAlignment},
         components::{Coords, UiComponent, UiComponentStyles},
     },
+    AppContext,
 };
 
 use super::{
@@ -22,7 +24,7 @@ const SUBPAGE_LEFT_MARGIN: f32 = NAV_ITEM_LEFT_MARGIN + 12.;
 
 /// A collapsible group of settings subpages in the sidebar.
 pub struct SettingsUmbrella {
-    pub label: &'static str,
+    pub label: LocalizedText,
     pub subpages: Vec<SettingsSection>,
     pub expanded: bool,
     /// Saved expanded state from before search began, restored when search is cleared.
@@ -32,7 +34,16 @@ pub struct SettingsUmbrella {
 }
 
 impl SettingsUmbrella {
+    #[cfg(test)]
     pub fn new(label: &'static str, subpages: Vec<SettingsSection>) -> Self {
+        Self::new_with_label(LocalizedText::from(label), subpages)
+    }
+
+    pub fn new_localized(label: UiStringKey, subpages: Vec<SettingsSection>) -> Self {
+        Self::new_with_label(LocalizedText::from(label), subpages)
+    }
+
+    fn new_with_label(label: LocalizedText, subpages: Vec<SettingsSection>) -> Self {
         let subpage_count = subpages.len();
         Self {
             label,
@@ -59,7 +70,7 @@ impl SettingsUmbrella {
     /// Returns a `Hoverable` so the entire row shares a single hover/click
     /// target — i.e. the hover styling and pointing-hand cursor apply to the
     /// whole clickable area rather than just the text.
-    pub fn render_umbrella_row(&self, appearance: &Appearance) -> Hoverable {
+    pub fn render_umbrella_row(&self, appearance: &Appearance, app: &AppContext) -> Hoverable {
         let chevron_icon = if self.expanded {
             Icon::ChevronUp
         } else {
@@ -79,7 +90,7 @@ impl SettingsUmbrella {
             .button(ButtonVariant::Text, self.button_state_handle.clone())
             .with_text_and_icon_label(TextAndIcon::new(
                 TextAndIconAlignment::TextFirst,
-                self.label.to_string(),
+                self.label.resolve(app).to_string(),
                 chevron_icon.to_warpui_icon(text_color),
                 MainAxisSize::Max,
                 MainAxisAlignment::SpaceBetween,
@@ -101,11 +112,12 @@ impl SettingsUmbrella {
         appearance: &Appearance,
         match_data: MatchData,
         is_active: bool,
+        app: &AppContext,
     ) -> Option<Hoverable> {
         let section = self.subpages.get(index)?;
         let mouse_state = self.subpage_button_states.get(index)?.clone();
 
-        let label = section.to_string() + &match_data.to_string();
+        let label = section.localized_label(app).to_string() + &match_data.to_string();
 
         let hoverable = appearance
             .ui_builder()

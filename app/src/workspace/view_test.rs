@@ -40,7 +40,7 @@ use crate::server::server_api::ServerApiProvider;
 use crate::server::sync_queue::SyncQueue;
 
 use crate::server::telemetry::context_provider::AppTelemetryContextProvider;
-use crate::settings::PrivacySettings;
+use crate::settings::{AppLocalizationSettings, PrivacySettings, SettingsFileError, UiLanguage};
 use crate::settings_view::keybindings::KeybindingChangedNotifier;
 use crate::settings_view::DisplayCount;
 use crate::system::SystemStats;
@@ -74,6 +74,7 @@ use crate::{experiments, workspace, GlobalResourceHandlesProvider};
 use crate::{AgentNotificationsModel, ObjectActions};
 
 use crate::settings::cloud_preferences_syncer::CloudPreferencesSyncer;
+use ::settings::Setting;
 use ai::index::full_source_code_embedding::manager::CodebaseIndexManager;
 use ai::project_context::model::ProjectContextModel;
 use pane_group::{NotebookPane, PaneState, SplitPaneState, TerminalPaneId};
@@ -3010,6 +3011,50 @@ fn test_open_cloud_agent_setup_guide_action_opens_management_view_and_is_idempot
                 .agent_management_view
                 .as_ref(ctx)
                 .is_showing_setup_guide());
+        });
+    });
+}
+
+#[test]
+fn test_settings_error_banner_renders_simplified_chinese_copy() {
+    App::test((), |mut app| async move {
+        initialize_app(&mut app);
+
+        let workspace = mock_workspace(&mut app);
+
+        app.update(|ctx| {
+            AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                settings
+                    .selected_ui_language
+                    .set_value(UiLanguage::ChineseSimplified, ctx)
+                    .unwrap();
+            });
+        });
+
+        workspace.update(&mut app, |workspace, ctx| {
+            workspace.settings_file_error = Some(SettingsFileError::InvalidSettings(vec![
+                "terminal.font_size".to_owned(),
+            ]));
+
+            let fields = workspace
+                .render_settings_error_banner(ctx)
+                .expect("settings error banner should render");
+
+            assert_eq!(fields.heading.as_deref(), Some("你的设置文件包含错误。"));
+            assert!(
+                fields.description.contains("无效值：terminal.font_size。"),
+                "Expected localized invalid settings description to preserve dynamic key: {}",
+                fields.description
+            );
+            assert!(
+                fields.description.contains("正在使用默认值。"),
+                "Expected localized default fallback copy: {}",
+                fields.description
+            );
+            assert_eq!(
+                fields.button.as_ref().map(|button| button.text.as_str()),
+                Some("打开文件")
+            );
         });
     });
 }

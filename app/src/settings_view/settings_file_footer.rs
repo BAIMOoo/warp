@@ -8,6 +8,7 @@
 //!   error *and* the user has dismissed the workspace banner.
 //! * Otherwise, a plain bordered "Open settings file" button.
 use crate::appearance::Appearance;
+use crate::localization::localized_settings_text;
 use crate::settings::SettingsFileError;
 use crate::ui_components::icons::Icon;
 use crate::WorkspaceAction;
@@ -22,6 +23,7 @@ use warpui::elements::{
 };
 use warpui::fonts::{FamilyId, Properties, Weight};
 use warpui::platform::Cursor;
+use warpui::AppContext;
 
 /// Horizontal + vertical padding applied to the footer inside the sidebar.
 const FOOTER_PADDING: f32 = 12.;
@@ -98,6 +100,7 @@ pub struct SettingsFooterMouseStates {
 /// 4px rounded corners, `code-02` leading icon, semibold label.
 pub fn render_open_settings_file_button(
     appearance: &Appearance,
+    app: &AppContext,
     mouse_state: MouseStateHandle,
 ) -> Box<dyn Element> {
     let theme = appearance.theme();
@@ -112,13 +115,17 @@ pub fn render_open_settings_file_button(
             .with_height(FOOTER_ICON_SIZE)
             .finish();
 
-        let label = Text::new_inline("Open settings file", ui_font_family, FOOTER_FONT_SIZE)
-            .with_color(text_color)
-            .with_style(Properties {
-                weight: Weight::Semibold,
-                ..Default::default()
-            })
-            .finish();
+        let label = Text::new_inline(
+            localized_settings_text("Open settings file", app),
+            ui_font_family,
+            FOOTER_FONT_SIZE,
+        )
+        .with_color(text_color)
+        .with_style(Properties {
+            weight: Weight::Semibold,
+            ..Default::default()
+        })
+        .finish();
 
         // Use `MainAxisSize::Max` so the row (and its surrounding bordered
         // container) expands to fill the full sidebar width. The icon + text
@@ -155,6 +162,7 @@ pub fn render_open_settings_file_button(
 /// messaging and actions.
 pub fn render_settings_error_alert(
     appearance: &Appearance,
+    app: &AppContext,
     error: &SettingsFileError,
     ai_enabled: bool,
     mouse_states: &SettingsFooterMouseStates,
@@ -168,9 +176,9 @@ pub fn render_settings_error_alert(
 
     // ── Heading + description ────────────────────────────────────────────
     // Copy is shared with `Workspace::render_settings_error_banner` via
-    // `SettingsFileError::heading_and_description` so the two UIs can't
+    // `SettingsFileError::localized_heading_and_description` so the two UIs can't
     // drift out of sync.
-    let (heading, description) = error.heading_and_description();
+    let (heading, description) = error.localized_heading_and_description(app);
     let heading_char_count = heading.chars().count();
     let combined_text = format!("{heading} {description}");
     // Soft-wrap (the `Text::new` default) is appropriate here since the
@@ -227,7 +235,7 @@ pub fn render_settings_error_alert(
         ui_font_family,
         text_color,
         mouse_states.alert_open_file_button.clone(),
-        "Open file",
+        localized_settings_text("Open file", app),
         /*icon=*/ None,
         /*bordered=*/ true,
         WorkspaceAction::OpenSettingsFile,
@@ -249,7 +257,7 @@ pub fn render_settings_error_alert(
             ui_font_family,
             text_color,
             mouse_states.alert_fix_with_oz_button.clone(),
-            "Fix with Oz",
+            localized_settings_text("Fix with Oz", app),
             Some(Icon::Oz),
             /*bordered=*/ false,
             WorkspaceAction::FixSettingsWithOz { error_description },
@@ -285,6 +293,7 @@ pub fn render_settings_error_alert(
 pub fn render_footer(
     kind: SettingsFooterKind,
     appearance: &Appearance,
+    app: &AppContext,
     error: Option<&SettingsFileError>,
     ai_enabled: bool,
     mouse_states: &SettingsFooterMouseStates,
@@ -293,15 +302,19 @@ pub fn render_footer(
         SettingsFooterKind::Hidden => return Empty::new().finish(),
         SettingsFooterKind::OpenButton => render_open_settings_file_button(
             appearance,
+            app,
             mouse_states.open_settings_file_button.clone(),
         ),
         SettingsFooterKind::ErrorAlert => match error {
-            Some(error) => render_settings_error_alert(appearance, error, ai_enabled, mouse_states),
+            Some(error) => {
+                render_settings_error_alert(appearance, app, error, ai_enabled, mouse_states)
+            }
             // Defensive fallback: if the error disappears between `choose` and
             // `render_footer`, fall back to the plain button rather than
             // rendering an empty alert shell.
             None => render_open_settings_file_button(
                 appearance,
+                app,
                 mouse_states.open_settings_file_button.clone(),
             ),
         },

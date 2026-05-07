@@ -20,7 +20,7 @@ pub fn initialize_settings_for_tests_with_mode(
         settings::{
             app_icon::AppIconSettings, init_and_register_user_preferences,
             manager::SettingsManager, AISettings, AccessibilitySettings, AliasExpansionSettings,
-            AppEditorSettings, BlockVisibilitySettings, ChangelogSettings,
+            AppEditorSettings, AppLocalizationSettings, BlockVisibilitySettings, ChangelogSettings,
             CloudPreferencesSettings, CodeSettings, DebugSettings, EmacsBindingsSettings,
             FontSettings, GPUSettings, InputModeSettings, InputSettings, NativePreferenceSettings,
             PaneSettings, SameLinePromptBlockSettings, ScrollSettings, SelectionSettings,
@@ -79,6 +79,7 @@ pub fn initialize_settings_for_tests_with_mode(
     }
 
     NativePreferenceSettings::register(app);
+    AppLocalizationSettings::register(app);
     SafeModeSettings::register(app);
     SameLinePromptBlockSettings::register(app);
     ScrollSettings::register(app);

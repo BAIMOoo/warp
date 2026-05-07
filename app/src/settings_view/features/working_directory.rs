@@ -9,8 +9,10 @@ use warpui::{
 use crate::{
     appearance::Appearance,
     editor::{EditorView, Event as EditorEvent, SingleLineEditorOptions, TextOptions},
+    localization::localized_settings_text,
     report_if_error, send_telemetry_from_ctx,
     server::telemetry::TelemetryEvent,
+    settings::AppLocalizationSettings,
     settings_view::features_page::render_group,
     terminal::session_settings::*,
     view_components::{dropdown::TOP_MENU_BAR_HEIGHT, Dropdown, DropdownItem},
@@ -103,6 +105,10 @@ impl WorkingDirectoryView {
                 ctx.notify();
             }
         });
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.refresh_localized_controls(ctx);
+            ctx.notify();
+        });
 
         Self {
             working_directory_dropdown,
@@ -113,6 +119,36 @@ impl WorkingDirectoryView {
             new_tab_working_directory_editor,
             split_pane_working_directory_dropdown,
             split_pane_working_directory_editor,
+        }
+    }
+
+    fn refresh_localized_controls(&mut self, ctx: &mut ViewContext<Self>) {
+        self.working_directory_dropdown
+            .update(ctx, |dropdown, ctx| {
+                init_top_level_dropdown(dropdown, ctx);
+            });
+        self.new_window_working_directory_dropdown
+            .update(ctx, |dropdown, ctx| {
+                init_per_source_dropdown(dropdown, NewSessionSource::Window, ctx);
+            });
+        self.new_tab_working_directory_dropdown
+            .update(ctx, |dropdown, ctx| {
+                init_per_source_dropdown(dropdown, NewSessionSource::Tab, ctx);
+            });
+        self.split_pane_working_directory_dropdown
+            .update(ctx, |dropdown, ctx| {
+                init_per_source_dropdown(dropdown, NewSessionSource::SplitPane, ctx);
+            });
+
+        for editor in [
+            &self.working_directory_editor,
+            &self.new_window_working_directory_editor,
+            &self.new_tab_working_directory_editor,
+            &self.split_pane_working_directory_editor,
+        ] {
+            editor.update(ctx, |editor, ctx| {
+                editor.set_placeholder_text(localized_settings_text("Directory path", ctx), ctx);
+            });
         }
     }
 }
@@ -145,21 +181,30 @@ impl View for WorkingDirectoryView {
             let items = Flex::column()
                 .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
                 .with_children([
-                    ui_builder.label("New window").build().finish(),
+                    ui_builder
+                        .label(localized_settings_text("New window", app))
+                        .build()
+                        .finish(),
                     render_row(
                         &self.new_window_working_directory_dropdown,
                         &self.new_window_working_directory_editor,
                         config.new_window.mode == WorkingDirectoryMode::CustomDir,
                         appearance,
                     ),
-                    ui_builder.label("New tab").build().finish(),
+                    ui_builder
+                        .label(localized_settings_text("New tab", app))
+                        .build()
+                        .finish(),
                     render_row(
                         &self.new_tab_working_directory_dropdown,
                         &self.new_tab_working_directory_editor,
                         config.new_tab.mode == WorkingDirectoryMode::CustomDir,
                         appearance,
                     ),
-                    ui_builder.label("Split pane").build().finish(),
+                    ui_builder
+                        .label(localized_settings_text("Split pane", app))
+                        .build()
+                        .finish(),
                     render_row(
                         &self.split_pane_working_directory_dropdown,
                         &self.split_pane_working_directory_editor,
@@ -305,13 +350,13 @@ fn init_top_level_dropdown(
     .into_iter()
     .map(|mode| {
         DropdownItem::new(
-            mode.dropdown_item_label(),
+            localized_settings_text(mode.dropdown_item_label(), ctx),
             WorkingDirectoryAction::SetGlobalWorkingDirectoryMode(Some(mode)),
         )
     })
     .collect_vec();
     items.push(DropdownItem::new(
-        "Advanced".to_string(),
+        localized_settings_text("Advanced", ctx).to_string(),
         WorkingDirectoryAction::SetGlobalWorkingDirectoryMode(None),
     ));
     let advanced_item_index = items.len() - 1;
@@ -322,7 +367,10 @@ fn init_top_level_dropdown(
     if config.advanced_mode {
         dropdown.set_selected_by_index(advanced_item_index, ctx);
     } else {
-        dropdown.set_selected_by_name(config.global.mode.dropdown_item_label(), ctx);
+        dropdown.set_selected_by_name(
+            localized_settings_text(config.global.mode.dropdown_item_label(), ctx),
+            ctx,
+        );
     }
 }
 
@@ -340,7 +388,7 @@ fn init_per_source_dropdown(
     .into_iter()
     .map(|mode| {
         DropdownItem::new(
-            mode.dropdown_item_label(),
+            localized_settings_text(mode.dropdown_item_label(), ctx),
             WorkingDirectoryAction::SetPerSourceWorkingDirectoryMode(source, mode),
         )
     })
@@ -354,7 +402,10 @@ fn init_per_source_dropdown(
         NewSessionSource::Tab => &config.new_tab,
         NewSessionSource::Window => &config.new_window,
     };
-    dropdown.set_selected_by_name(source_config.mode.dropdown_item_label(), ctx);
+    dropdown.set_selected_by_name(
+        localized_settings_text(source_config.mode.dropdown_item_label(), ctx),
+        ctx,
+    );
 }
 
 /// Creates a new editor view for entering a custom initial directory path.
@@ -370,7 +421,7 @@ fn create_editor(
         };
         ctx.add_typed_action_view(|ctx| {
             let mut editor = EditorView::single_line(options, ctx);
-            editor.set_placeholder_text("Directory path", ctx);
+            editor.set_placeholder_text(localized_settings_text("Directory path", ctx), ctx);
             editor
         })
     };

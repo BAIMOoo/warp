@@ -4,6 +4,7 @@ use crate::ai::mcp::templatable_installation::{VariableType, VariableValue};
 use crate::appearance::Appearance;
 use crate::editor::Event as EditorEvent;
 use crate::editor::{EditorView, SingleLineEditorOptions};
+use crate::localization::localized_settings_text;
 use crate::settings_view::mcp_servers::style::{
     INSTALLATION_MODAL_BUTTON_GAP, INSTALLATION_MODAL_BUTTON_PADDING,
     INSTALLATION_MODAL_INPUT_VERTICAL_SPACING, INSTALLATION_MODAL_LABEL_VERTICAL_SPACING,
@@ -220,6 +221,7 @@ impl InstallationModalBody {
 
     fn render_title(
         name: String,
+        app: &AppContext,
         appearance: &Appearance,
         close_button_mouse_state: MouseStateHandle,
     ) -> Box<dyn Element> {
@@ -253,7 +255,7 @@ impl InstallationModalBody {
 
         // Renders MCP title text
         let title = Text::new(
-            format!("Install {name}"),
+            localized_settings_text("Install {name}", app).replace("{name}", &name),
             appearance.ui_font_family(),
             appearance.header_font_size(),
         )
@@ -408,7 +410,11 @@ impl InstallationModalBody {
         form_column
     }
 
-    fn render_source_indicator(is_shared: bool, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_source_indicator(
+        is_shared: bool,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
         let info_icon = ConstrainedBox::new(
             Icon::Info
                 .to_warpui_icon(appearance.theme().disabled_ui_text_color())
@@ -419,9 +425,9 @@ impl InstallationModalBody {
         .finish();
 
         let source_text = if is_shared {
-            "Shared from team"
+            localized_settings_text("Shared from team", app)
         } else {
-            "From another device"
+            localized_settings_text("From another device", app)
         };
 
         let label_text = Text::new_inline(
@@ -440,11 +446,11 @@ impl InstallationModalBody {
             .finish()
     }
 
-    fn render_action_buttons(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_action_buttons(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         let cancel_button = appearance
             .ui_builder()
             .button(ButtonVariant::Text, self.cancel_mouse_state.clone())
-            .with_text_label("Cancel".into())
+            .with_text_label(localized_settings_text("Cancel", app).into())
             .with_style(UiComponentStyles {
                 font_weight: Some(Weight::Bold),
                 font_color: Some(appearance.theme().active_ui_text_color().into()),
@@ -481,7 +487,7 @@ impl InstallationModalBody {
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_child(
                 Text::new_inline(
-                    "Install",
+                    localized_settings_text("Install", app),
                     appearance.ui_font_family(),
                     appearance.ui_font_size(),
                 )
@@ -520,9 +526,9 @@ impl InstallationModalBody {
             .finish()
     }
 
-    fn render_buttons_row(&self, appearance: &Appearance) -> Box<dyn Element> {
-        let source_indicator = Self::render_source_indicator(self.is_shared, appearance);
-        let action_buttons = self.render_action_buttons(appearance);
+    fn render_buttons_row(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
+        let source_indicator = Self::render_source_indicator(self.is_shared, appearance, app);
+        let action_buttons = self.render_action_buttons(appearance, app);
 
         let spacer = Shrinkable::new(1., Container::new(Empty::new().finish()).finish()).finish();
 
@@ -581,6 +587,7 @@ impl View for InstallationModalBody {
 
             form_column.add_child(Self::render_title(
                 templatable_mcp_server.name.clone(),
+                ctx,
                 appearance,
                 self.close_button_mouse_state.clone(),
             ));
@@ -608,11 +615,11 @@ impl View for InstallationModalBody {
                         .with_uniform_padding(INSTALLATION_MODAL_PADDING)
                         .finish(),
                 )
-                .with_child(self.render_buttons_row(appearance))
+                .with_child(self.render_buttons_row(appearance, ctx))
                 .finish()
         } else {
             Text::new(
-                "No MCP server selected",
+                localized_settings_text("No MCP server selected", ctx),
                 appearance.ui_font_family(),
                 appearance.ui_font_size(),
             )

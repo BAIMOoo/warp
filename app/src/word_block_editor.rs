@@ -106,6 +106,17 @@ impl WordBlockEditorView {
         }
     }
 
+    pub fn set_placeholder_text(
+        &mut self,
+        placeholder: impl Into<String>,
+        ctx: &mut ViewContext<Self>,
+    ) {
+        self.editor_view.update(ctx, |editor, ctx| {
+            editor.set_placeholder_text(placeholder, ctx);
+        });
+        ctx.notify();
+    }
+
     // Return list of words that fail the validator check, includes text in the buffer
     pub fn get_list_of_invalid_words(&self, ctx: &AppContext) -> Vec<String> {
         let mut words: Vec<String> = self

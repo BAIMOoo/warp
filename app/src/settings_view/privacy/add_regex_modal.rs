@@ -3,6 +3,8 @@ use crate::modal::{Modal, ModalViewState};
 use crate::{
     appearance::Appearance,
     editor::{EditorView, PropagateAndNoOpNavigationKeys, SingleLineEditorOptions, TextOptions},
+    localization::{localized_for_app, localized_settings_text, UiStringKey},
+    settings::AppLocalizationSettings,
 };
 use regex::Regex;
 use warp_editor::editor::NavigationKey;
@@ -50,9 +52,7 @@ impl AddRegexModal {
                     PropagateAndNoOpNavigationKeys::Always,
                 ..Default::default()
             };
-            let mut editor = EditorView::single_line(options, ctx);
-            editor.set_placeholder_text("e.g. \"Google API Key\"", ctx);
-            editor
+            EditorView::single_line(options, ctx)
         });
 
         let pattern_editor = ctx.add_typed_action_view(|ctx| {
@@ -77,13 +77,25 @@ impl AddRegexModal {
         ctx.subscribe_to_view(&pattern_editor, |me, _, event, ctx| {
             me.handle_pattern_editor_event(event, ctx);
         });
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.update_cached_localized_controls(ctx);
+        });
 
-        Self {
+        let instance = Self {
             name_editor,
             pattern_editor,
             cancel_button_mouse_state: Default::default(),
             submit_button_mouse_state: Default::default(),
-        }
+        };
+        instance.update_cached_localized_controls(ctx);
+        instance
+    }
+
+    fn update_cached_localized_controls(&self, ctx: &mut ViewContext<Self>) {
+        self.name_editor.update(ctx, |editor, ctx| {
+            editor
+                .set_placeholder_text(localized_settings_text("e.g. \"Google API Key\"", ctx), ctx);
+        });
     }
 
     fn submit(&mut self, ctx: &mut ViewContext<Self>) {
@@ -190,7 +202,7 @@ impl View for AddRegexModal {
         let is_submit_enabled = !pattern_text.trim().is_empty() && is_valid_regex;
 
         let name_label = Text::new(
-            "Name (optional)",
+            localized_settings_text("Name (optional)", app),
             appearance.ui_font_family(),
             LABEL_FONT_SIZE,
         )
@@ -198,7 +210,7 @@ impl View for AddRegexModal {
         .finish();
 
         let regex_label = Text::new(
-            "Regex pattern",
+            localized_settings_text("Regex pattern", app),
             appearance.ui_font_family(),
             LABEL_FONT_SIZE,
         )
@@ -217,7 +229,7 @@ impl View for AddRegexModal {
                 ButtonVariant::Accent,
                 self.submit_button_mouse_state.clone(),
             )
-            .with_text_label("Add regex".to_string())
+            .with_text_label(localized_settings_text("Add regex", app).to_string())
             .with_style(button_style);
 
         if !is_submit_enabled {
@@ -232,7 +244,7 @@ impl View for AddRegexModal {
                     1.,
                     Container::new(if !is_valid_regex && !pattern_text.trim().is_empty() {
                         Text::new(
-                            "Invalid regex",
+                            localized_settings_text("Invalid regex", app),
                             appearance.ui_font_family(),
                             LABEL_FONT_SIZE,
                         )
@@ -258,7 +270,9 @@ impl View for AddRegexModal {
                         ButtonVariant::Secondary,
                         self.cancel_button_mouse_state.clone(),
                     )
-                    .with_text_label("Cancel".to_string())
+                    .with_text_label(
+                        localized_for_app(UiStringKey::SettingsDialogCancel, app).to_string(),
+                    )
                     .with_style(button_style)
                     .build()
                     .on_click(move |ctx, _, _| {
@@ -324,6 +338,13 @@ impl AddRegexModalViewState {
 
     pub fn render(&self) -> Box<dyn Element> {
         self.state.render()
+    }
+
+    pub fn update_title<T: View>(&mut self, title: Option<String>, ctx: &mut ViewContext<T>) {
+        self.state.view.update(ctx, |modal, ctx| {
+            modal.set_title(title);
+            ctx.notify();
+        });
     }
 
     pub fn open<T: View>(&mut self, ctx: &mut ViewContext<T>) {

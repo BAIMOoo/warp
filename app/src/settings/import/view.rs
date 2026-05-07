@@ -20,6 +20,7 @@ use warpui::{
 use warpui::ui_components::radio_buttons::RadioButtonStateHandle;
 
 use crate::{
+    localization::localized_settings_text,
     report_if_error, send_telemetry_from_ctx,
     settings::{
         import::{
@@ -271,7 +272,7 @@ impl SettingsImportView {
                     font_size: Some(FONT_SIZE),
                     ..Default::default()
                 })
-                .with_centered_text_label("Import".to_owned())
+                .with_centered_text_label(localized_settings_text("Import", app).to_owned())
                 .build()
                 .on_click(move |ctx, _, _| {
                     ctx.dispatch_typed_action(SettingsImportAction::ImportButtonClicked);
@@ -282,7 +283,11 @@ impl SettingsImportView {
         .finish()
     }
 
-    fn render_reset_button(&self, appearance: &Appearance) -> Box<dyn warpui::Element> {
+    fn render_reset_button(
+        &self,
+        appearance: &Appearance,
+        app: &warpui::AppContext,
+    ) -> Box<dyn warpui::Element> {
         appearance
             .ui_builder()
             .button(ButtonVariant::Secondary, self.skip_button_handle.clone())
@@ -298,7 +303,9 @@ impl SettingsImportView {
                 background: Some(appearance.theme().outline().into()),
                 ..Default::default()
             })
-            .with_centered_text_label("Reset to Warp defaults".to_owned())
+            .with_centered_text_label(
+                localized_settings_text("Reset to Warp defaults", app).to_owned(),
+            )
             .build()
             .on_click(move |ctx, _, _| {
                 ctx.dispatch_typed_action(SettingsImportAction::ResetButtonClicked);
@@ -317,9 +324,13 @@ impl SettingsImportView {
         let font_family = appearance.monospace_font_family();
         let font_color = blended_colors::text_sub(theme, theme.background());
         let description = Container::new(
-            Text::new_inline(setting.setting_type.get_name(), font_family, FONT_SIZE)
-                .with_color(font_color)
-                .finish(),
+            Text::new_inline(
+                localized_settings_text(setting.setting_type.get_name(), app),
+                font_family,
+                FONT_SIZE,
+            )
+            .with_color(font_color)
+            .finish(),
         )
         .with_margin_left(CHECKBOX_SPACING);
         let setting_type = setting.setting_type.to_owned();
@@ -422,20 +433,35 @@ impl SettingsImportView {
                 .any(|setting| setting.setting_type == SettingType::Theme)
             {
                 if num_prefs == 1 {
-                    preference_text_elements.push(self.render_secondary_text(appearance, "Theme"));
+                    preference_text_elements.push(
+                        self.render_secondary_text(
+                            appearance,
+                            localized_settings_text("Theme", app),
+                        ),
+                    );
                 } else {
-                    preference_text_elements.push(self.render_secondary_text(appearance, "Theme,"));
+                    preference_text_elements.push(
+                        self.render_secondary_text(
+                            appearance,
+                            localized_settings_text("Theme,", app),
+                        ),
+                    );
                 }
                 theme_subtraction = 1;
             }
             match num_prefs - theme_subtraction {
-                1 => preference_text_elements
-                    .push(self.render_secondary_text(appearance, "1 other setting")),
-                0 => (),
-                _ => preference_text_elements.push(self.render_secondary_text(
+                1 => preference_text_elements.push(self.render_secondary_text(
                     appearance,
-                    format!("{} other settings", num_prefs - theme_subtraction),
+                    localized_settings_text("1 other setting", app),
                 )),
+                0 => (),
+                _ => preference_text_elements.push(
+                    self.render_secondary_text(
+                        appearance,
+                        localized_settings_text("{count} other settings", app)
+                            .replace("{count}", &(num_prefs - theme_subtraction).to_string()),
+                    ),
+                ),
             }
         }
 
@@ -945,7 +971,7 @@ impl View for SettingsImportView {
             State::Completed { imported_idx: None } | State::Failed => {
                 Container::new(Flex::row().finish()).finish()
             }
-            State::Completed { imported_idx: _ } => self.render_reset_button(appearance),
+            State::Completed { imported_idx: _ } => self.render_reset_button(appearance, app),
         };
 
         let config_radio_buttons = appearance
@@ -995,7 +1021,10 @@ impl View for SettingsImportView {
         if display_new_session_text {
             new_session_setting_text = Container::new(
                 Text::new(
-                    "Some settings will take effect when you open a new session.",
+                    localized_settings_text(
+                        "Some settings will take effect when you open a new session.",
+                        app,
+                    ),
                     font_family,
                     font_size,
                 )
@@ -1016,9 +1045,13 @@ impl View for SettingsImportView {
 
         if matches!(self.state, State::Loading) {
             return Container::new(
-                Text::new(LOADING_TEXT, font_family, font_size)
-                    .with_color(font_color.into_solid())
-                    .finish(),
+                Text::new(
+                    localized_settings_text(LOADING_TEXT, app),
+                    font_family,
+                    font_size,
+                )
+                .with_color(font_color.into_solid())
+                .finish(),
             )
             .with_margin_top(14.)
             .with_horizontal_margin(DROPDOWN_HORIZONTAL_MARGIN)
@@ -1030,10 +1063,14 @@ impl View for SettingsImportView {
             Flex::column()
                 .with_child(
                     Container::new(
-                        Text::new(WELCOME_TEXT, font_family, font_size)
-                            .with_color(font_color.into_solid())
-                            .with_style(Properties::default().weight(Weight::Bold))
-                            .finish(),
+                        Text::new(
+                            localized_settings_text(WELCOME_TEXT, app),
+                            font_family,
+                            font_size,
+                        )
+                        .with_color(font_color.into_solid())
+                        .with_style(Properties::default().weight(Weight::Bold))
+                        .finish(),
                     )
                     .with_horizontal_margin(DROPDOWN_HORIZONTAL_MARGIN)
                     .with_margin_top(BLOCK_TOP_MARGIN)
@@ -1160,4 +1197,46 @@ fn create_toggleable_settings(config: &Config) -> Vec<ToggleableSetting> {
         .into_iter()
         .map(ToggleableSetting::new)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SettingType;
+    use crate::{
+        localization::{localized_settings_text, UiLanguage},
+        settings::AppLocalizationSettings,
+        test_util::settings::initialize_settings_for_tests,
+    };
+    use settings::Setting;
+    use warpui::{App, SingletonEntity};
+
+    #[test]
+    fn settings_import_view_static_copy_resolves_to_simplified_chinese() {
+        App::test((), |mut app| async move {
+            initialize_settings_for_tests(&mut app);
+
+            app.update(|ctx| {
+                AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    settings
+                        .selected_ui_language
+                        .set_value(UiLanguage::ChineseSimplified, ctx)
+                        .unwrap();
+                });
+
+                assert_eq!(localized_settings_text("Import", ctx), "导入");
+                assert_eq!(
+                    localized_settings_text("Reset to Warp defaults", ctx),
+                    "重置为 Warp 默认值"
+                );
+                assert_eq!(
+                    localized_settings_text("Select a settings profile to import:", ctx),
+                    "选择要导入的设置配置文件："
+                );
+                assert_eq!(
+                    localized_settings_text(SettingType::WindowSize.get_name(), ctx),
+                    "窗口尺寸"
+                );
+            });
+        })
+    }
 }

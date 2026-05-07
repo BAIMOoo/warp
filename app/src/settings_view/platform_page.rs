@@ -10,11 +10,13 @@ use super::{
     SettingsSection,
 };
 use crate::auth::AuthStateProvider;
+use crate::localization::{localized_settings_text, UiStringKey};
 use crate::server::{ids::ApiKeyUid, server_api::auth::AuthClient};
 use crate::util::truncation::truncate_from_end;
 use crate::{
     appearance::Appearance,
     modal::{Modal, ModalEvent, ModalViewState},
+    settings::AppLocalizationSettings,
     ui_components::icons::Icon,
     util::time_format::format_approx_duration_from_now_utc,
 };
@@ -59,6 +61,7 @@ pub struct PlatformPageView {
     expire_buttons: HashMap<ApiKeyUid, ViewHandle<ExpireApiKeyButton>>,
     is_loading: bool,
     documentation_link_highlight: HighlightedHyperlink,
+    create_api_key_modal_title: Option<&'static str>,
 }
 
 impl PlatformPageView {
@@ -119,6 +122,10 @@ impl PlatformPageView {
         );
     }
     pub fn new(ctx: &mut ViewContext<PlatformPageView>) -> Self {
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |me, _, _, ctx| {
+            me.update_cached_localized_controls(ctx);
+        });
+
         // Create the modal body
         let create_api_key_body = ctx.add_typed_action_view(CreateApiKeyModal::new);
         ctx.subscribe_to_view(&create_api_key_body, |me, _, event, ctx| {
@@ -127,41 +134,49 @@ impl PlatformPageView {
 
         // Create the modal wrapper
         let create_api_key_modal_view = ctx.add_typed_action_view(|ctx| {
-            Modal::new(Some("New API key".to_string()), create_api_key_body, ctx)
-                .with_modal_style(UiComponentStyles {
-                    width: Some(MODAL_WIDTH),
-                    height: Some(MODAL_HEIGHT),
-                    ..Default::default()
-                })
-                .with_header_style(UiComponentStyles {
-                    padding: Some(Coords {
-                        top: 24.,
-                        bottom: 0.,
-                        left: 24.,
-                        right: 24.,
-                    }),
-                    font_size: Some(16.),
-                    font_weight: Some(warpui::fonts::Weight::Bold),
-                    ..Default::default()
-                })
-                .with_body_style(UiComponentStyles {
-                    padding: Some(Coords {
-                        top: 0.,
-                        bottom: 24.,
-                        left: 24.,
-                        right: 24.,
-                    }),
-                    ..Default::default()
-                })
-                .with_background_opacity(100)
-                .with_dismiss_on_click()
+            Modal::new(
+                Some(localized_settings_text("New API key", ctx).to_string()),
+                create_api_key_body,
+                ctx,
+            )
+            .with_modal_style(UiComponentStyles {
+                width: Some(MODAL_WIDTH),
+                height: Some(MODAL_HEIGHT),
+                ..Default::default()
+            })
+            .with_header_style(UiComponentStyles {
+                padding: Some(Coords {
+                    top: 24.,
+                    bottom: 0.,
+                    left: 24.,
+                    right: 24.,
+                }),
+                font_size: Some(16.),
+                font_weight: Some(warpui::fonts::Weight::Bold),
+                ..Default::default()
+            })
+            .with_body_style(UiComponentStyles {
+                padding: Some(Coords {
+                    top: 0.,
+                    bottom: 24.,
+                    left: 24.,
+                    right: 24.,
+                }),
+                ..Default::default()
+            })
+            .with_background_opacity(100)
+            .with_dismiss_on_click()
         });
         ctx.subscribe_to_view(&create_api_key_modal_view, |me, _, event, ctx| {
             me.handle_modal_event(event, ctx);
         });
 
         PlatformPageView {
-            page: PageType::new_monolith(PlatformPageWidget::default(), None, true),
+            page: PageType::new_monolith_localized(
+                PlatformPageWidget::default(),
+                Some(UiStringKey::SettingsSectionOzCloudApiKeys),
+                true,
+            ),
             create_api_key_modal_state: CreateApiKeyModalViewState::new(ModalViewState::new(
                 create_api_key_modal_view,
             )),
@@ -169,15 +184,24 @@ impl PlatformPageView {
             expire_buttons: HashMap::new(),
             is_loading: true,
             documentation_link_highlight: HighlightedHyperlink::default(),
+            create_api_key_modal_title: Some("New API key"),
         }
     }
 
     fn show_create_api_key_modal(&mut self, ctx: &mut ViewContext<Self>) {
+        self.create_api_key_modal_title = Some("New API key");
         // Ensure header reads "New API key" when opening the form
-        self.create_api_key_modal_state
-            .set_title(Some("New API key".to_string()), ctx);
+        self.update_cached_localized_controls(ctx);
         self.create_api_key_modal_state.open(ctx);
         ctx.emit(PlatformPageViewEvent::ShowCreateApiKeyModal);
+    }
+
+    fn update_cached_localized_controls(&mut self, ctx: &mut ViewContext<Self>) {
+        let title = self
+            .create_api_key_modal_title
+            .map(|title| localized_settings_text(title, ctx).to_string());
+        self.create_api_key_modal_state.set_title(title, ctx);
+        ctx.notify();
     }
 
     fn hide_create_api_key_modal(&mut self, ctx: &mut ViewContext<Self>) {
@@ -203,9 +227,9 @@ impl PlatformPageView {
                 self.hide_create_api_key_modal(ctx);
             }
             CreateApiKeyModalEvent::Created { api_key } => {
+                self.create_api_key_modal_title = Some("Save your key");
                 // Switch modal header off for success screen
-                self.create_api_key_modal_state
-                    .set_title(Some("Save your key".to_string()), ctx);
+                self.update_cached_localized_controls(ctx);
                 // Append to list locally
                 // Ensure the per-key expire button exists
                 let uid = api_key.uid.clone().into_inner();
@@ -259,7 +283,7 @@ impl PlatformPageView {
                 let window_id = ctx.window_id();
                 crate::ToastStack::handle(ctx).update(ctx, |toast_stack, ctx| {
                     let toast = crate::view_components::DismissibleToast::success(
-                        "API key deleted".to_string(),
+                        localized_settings_text("API key deleted", ctx).to_string(),
                     );
                     toast_stack.add_ephemeral_toast(toast, window_id, ctx);
                 });
@@ -376,10 +400,17 @@ impl PlatformPageWidget {
         &self,
         view: &PlatformPageView,
         appearance: &Appearance,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let text = vec![
-            FormattedTextFragment::plain_text("Create and manage API keys to allow other Oz cloud agents to access your Warp account.\nFor more information, visit the "),
-            FormattedTextFragment::hyperlink("Documentation.", API_KEY_DOCS_URL),
+            FormattedTextFragment::plain_text(localized_settings_text(
+                "Create and manage API keys to allow other Oz cloud agents to access your Warp account.\nFor more information, visit the ",
+                app,
+            )),
+            FormattedTextFragment::hyperlink(
+                localized_settings_text("Documentation.", app),
+                API_KEY_DOCS_URL,
+            ),
         ];
 
         let text_element = FormattedTextElement::new(
@@ -403,7 +434,7 @@ impl PlatformPageWidget {
         &self,
         appearance: &Appearance,
         view: &PlatformPageView,
-        _app: &AppContext,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let ui_builder = appearance.ui_builder();
         let api_keys = &view.api_keys;
@@ -413,10 +444,14 @@ impl PlatformPageWidget {
             Flex::row()
                 .with_cross_axis_alignment(CrossAxisAlignment::Center)
                 .with_child(
-                    Text::new_inline("Oz Cloud API Keys", appearance.ui_font_family(), 16.)
-                        .with_style(Properties::default().weight(Weight::Bold))
-                        .with_color(appearance.theme().active_ui_text_color().into())
-                        .finish(),
+                    Text::new_inline(
+                        localized_settings_text("Oz Cloud API Keys", app),
+                        appearance.ui_font_family(),
+                        16.,
+                    )
+                    .with_style(Properties::default().weight(Weight::Bold))
+                    .with_color(appearance.theme().active_ui_text_color().into())
+                    .finish(),
                 )
                 .with_child(Shrinkable::new(1.0, Empty::new().finish()).finish())
                 .with_child(
@@ -425,7 +460,9 @@ impl PlatformPageWidget {
                             ButtonVariant::Outlined,
                             self.create_api_key_button_mouse_state.clone(),
                         )
-                        .with_text_label("+ Create API Key".to_string())
+                        .with_text_label(
+                            localized_settings_text("+ Create API Key", app).to_string(),
+                        )
                         .build()
                         .on_click(|ctx, _, _| {
                             ctx.dispatch_typed_action(PlatformPageAction::ShowCreateApiKeyModal);
@@ -436,7 +473,7 @@ impl PlatformPageWidget {
         );
 
         col.add_child(
-            Container::new(self.render_description_with_link(view, appearance))
+            Container::new(self.render_description_with_link(view, appearance, app))
                 .with_margin_top(8.)
                 .finish(),
         );
@@ -445,38 +482,45 @@ impl PlatformPageWidget {
             if view.is_loading {
                 // Render nothing (just the description) while loading
             } else {
-                col.add_child(self.render_zero_state(appearance));
+                col.add_child(self.render_zero_state(appearance, app));
             }
         } else {
-            col.add_child(self.render_api_keys_header(appearance));
-            col.add_child(self.render_api_keys_rows(appearance, view, api_keys));
+            col.add_child(self.render_api_keys_header(appearance, app));
+            col.add_child(self.render_api_keys_rows(appearance, view, api_keys, app));
         }
 
         col.finish()
     }
 
-    fn render_api_keys_header(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_api_keys_header(
+        &self,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
         let mut header_row = Flex::row()
             .with_cross_axis_alignment(CrossAxisAlignment::Center)
             .with_main_axis_size(MainAxisSize::Max);
+        header_row.add_child(
+            Expanded::new(1., self.render_header_cell(appearance, "Name", app)).finish(),
+        );
         header_row
-            .add_child(Expanded::new(1., self.render_header_cell(appearance, "Name")).finish());
-        header_row
-            .add_child(Expanded::new(1., self.render_header_cell(appearance, "Key")).finish());
+            .add_child(Expanded::new(1., self.render_header_cell(appearance, "Key", app)).finish());
         if FeatureFlag::TeamApiKeys.is_enabled() {
             header_row.add_child(
-                Expanded::new(1., self.render_header_cell(appearance, "Scope")).finish(),
+                Expanded::new(1., self.render_header_cell(appearance, "Scope", app)).finish(),
             );
         }
+        header_row.add_child(
+            Expanded::new(1., self.render_header_cell(appearance, "Created", app)).finish(),
+        );
+        header_row.add_child(
+            Expanded::new(1., self.render_header_cell(appearance, "Last used", app)).finish(),
+        );
+        header_row.add_child(
+            Expanded::new(1., self.render_header_cell(appearance, "Expires at", app)).finish(),
+        );
         header_row
-            .add_child(Expanded::new(1., self.render_header_cell(appearance, "Created")).finish());
-        header_row.add_child(
-            Expanded::new(1., self.render_header_cell(appearance, "Last used")).finish(),
-        );
-        header_row.add_child(
-            Expanded::new(1., self.render_header_cell(appearance, "Expires at")).finish(),
-        );
-        header_row.add_child(Expanded::new(0.5, self.render_header_cell(appearance, "")).finish());
+            .add_child(Expanded::new(0.5, self.render_header_cell(appearance, "", app)).finish());
 
         Container::new(header_row.finish())
             .with_margin_top(16.)
@@ -490,18 +534,24 @@ impl PlatformPageWidget {
         appearance: &Appearance,
         view: &PlatformPageView,
         api_keys: &[APIKeyProperties],
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let mut col = Flex::column();
         for key in api_keys.iter() {
-            col.add_child(self.render_api_key_row(appearance, view, key));
+            col.add_child(self.render_api_key_row(appearance, view, key, app));
         }
         col.finish()
     }
 
-    fn render_header_cell(&self, appearance: &Appearance, label: &str) -> Box<dyn Element> {
+    fn render_header_cell(
+        &self,
+        appearance: &Appearance,
+        label: &'static str,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
         Container::new(
             Text::new_inline(
-                label.to_string(),
+                localized_settings_text(label, app),
                 appearance.ui_font_family(),
                 CONTENT_FONT_SIZE,
             )
@@ -517,16 +567,17 @@ impl PlatformPageWidget {
         appearance: &Appearance,
         view: &PlatformPageView,
         key: &APIKeyProperties,
+        app: &AppContext,
     ) -> Box<dyn Element> {
         let created = format_approx_duration_from_now_utc(key.created_at);
         let last_used = key
             .last_used_at
             .map(format_approx_duration_from_now_utc)
-            .unwrap_or_else(|| "Never".to_owned());
+            .unwrap_or_else(|| localized_settings_text("Never", app).to_owned());
         let expires_at = key
             .expires_at
             .map(|dt| format!("{}", dt.format("%b %-d, %Y")))
-            .unwrap_or_else(|| "Never".to_owned());
+            .unwrap_or_else(|| localized_settings_text("Never", app).to_owned());
 
         // Truncate long names to keep columns aligned
         let name_display = truncate_from_end(&key.name, 21);
@@ -566,8 +617,8 @@ impl PlatformPageWidget {
         );
         if FeatureFlag::TeamApiKeys.is_enabled() {
             let scope_display = match key.scope {
-                ApiKeyScope::Personal => "Personal",
-                ApiKeyScope::Team => "Team",
+                ApiKeyScope::Personal => localized_settings_text("Personal", app),
+                ApiKeyScope::Team => localized_settings_text("Team", app),
             };
             row.add_child(
                 Expanded::new(
@@ -637,7 +688,7 @@ impl PlatformPageWidget {
             .finish()
     }
 
-    fn render_zero_state(&self, appearance: &Appearance) -> Box<dyn Element> {
+    fn render_zero_state(&self, appearance: &Appearance, app: &AppContext) -> Box<dyn Element> {
         Container::new(
             Align::new(
                 Flex::column()
@@ -655,7 +706,7 @@ impl PlatformPageWidget {
                     .with_child(
                         Container::new(
                             Text::new(
-                                "No API Keys",
+                                localized_settings_text("No API Keys", app),
                                 appearance.ui_font_family(),
                                 SUBHEADER_FONT_SIZE,
                             )
@@ -669,7 +720,10 @@ impl PlatformPageWidget {
                     .with_child(
                         Container::new(
                             Text::new(
-                                "Create a key to manage external access to Warp",
+                                localized_settings_text(
+                                    "Create a key to manage external access to Warp",
+                                    app,
+                                ),
                                 appearance.ui_font_family(),
                                 CONTENT_FONT_SIZE,
                             )

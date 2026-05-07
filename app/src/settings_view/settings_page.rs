@@ -26,6 +26,7 @@ use super::{
 };
 use crate::{
     appearance::Appearance,
+    localization::{localized_settings_text, LocalizedText, UiStringKey},
     settings::CloudPreferencesSettings,
     themes::theme::Fill,
     ui_components::icons::Icon,
@@ -171,6 +172,7 @@ impl SettingsPage {
         appearance: &Appearance,
         match_data: MatchData,
         clicked: bool,
+        app: &AppContext,
     ) -> Hoverable {
         appearance
             .ui_builder()
@@ -182,7 +184,9 @@ impl SettingsPage {
                 },
                 self.button_state_handle.clone(),
             )
-            .with_text_label(self.section.to_string() + &match_data.to_string())
+            .with_text_label(
+                self.section.localized_label(app).to_string() + &match_data.to_string(),
+            )
             .with_style(
                 UiComponentStyles::default()
                     .set_border_width(0.)
@@ -1188,7 +1192,7 @@ pub(super) enum PageType<V: warpui::View> {
     /// handle and render their own scrollable elements.
     Monolith {
         widget: Box<dyn SettingsWidget<View = V>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         filter: bool,
         vertical_scroll_state: Option<ClippedScrollStateHandle>,
         horizontal_scroll_state: Option<ClippedScrollStateHandle>,
@@ -1197,7 +1201,7 @@ pub(super) enum PageType<V: warpui::View> {
     /// A page which is a series of [`SettingsWidget`]s that don't fall under sub-categories.
     Uncategorized {
         widgets: Vec<Box<dyn SettingsWidget<View = V>>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         filter: Vec<usize>,
         vertical_scroll_state: ClippedScrollStateHandle,
         horizontal_scroll_state: ClippedScrollStateHandle,
@@ -1207,7 +1211,7 @@ pub(super) enum PageType<V: warpui::View> {
     /// A page which is a series of [`SettingsWidget`]s that fall under sub-categories.
     Categorized {
         categories: Vec<Category<V>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         filter: Vec<Vec<usize>>,
         vertical_scroll_state: ClippedScrollStateHandle,
         horizontal_scroll_state: ClippedScrollStateHandle,
@@ -1280,7 +1284,31 @@ impl<V: warpui::View> PageType<V> {
         Self::Monolith {
             filter: true,
             widget: Box::new(widget),
-            title,
+            title: title.map(LocalizedText::from),
+            vertical_scroll_state,
+            horizontal_scroll_state,
+            min_page_width: MIN_PAGE_WIDTH,
+        }
+    }
+
+    pub(super) fn new_monolith_localized(
+        widget: impl SettingsWidget<View = V> + 'static,
+        title: Option<UiStringKey>,
+        is_dual_scrollable: bool,
+    ) -> Self {
+        let (vertical_scroll_state, horizontal_scroll_state) = if is_dual_scrollable {
+            (
+                Some(ClippedScrollStateHandle::default()),
+                Some(ClippedScrollStateHandle::default()),
+            )
+        } else {
+            (None, None)
+        };
+
+        Self::Monolith {
+            filter: true,
+            widget: Box::new(widget),
+            title: title.map(LocalizedText::from),
             vertical_scroll_state,
             horizontal_scroll_state,
             min_page_width: MIN_PAGE_WIDTH,
@@ -1295,7 +1323,22 @@ impl<V: warpui::View> PageType<V> {
         Self::Uncategorized {
             filter: widgets.iter().enumerate().map(|(i, _)| i).collect(),
             widgets,
-            title,
+            title: title.map(LocalizedText::from),
+            vertical_scroll_state: Default::default(),
+            horizontal_scroll_state: Default::default(),
+            highlighted_widget_id: Default::default(),
+            min_page_width: MIN_PAGE_WIDTH,
+        }
+    }
+
+    pub(super) fn new_uncategorized_localized(
+        widgets: Vec<Box<dyn SettingsWidget<View = V>>>,
+        title: Option<UiStringKey>,
+    ) -> Self {
+        Self::Uncategorized {
+            filter: widgets.iter().enumerate().map(|(i, _)| i).collect(),
+            widgets,
+            title: title.map(LocalizedText::from),
             vertical_scroll_state: Default::default(),
             horizontal_scroll_state: Default::default(),
             highlighted_widget_id: Default::default(),
@@ -1321,7 +1364,7 @@ impl<V: warpui::View> PageType<V> {
                 })
                 .collect(),
             categories,
-            title,
+            title: title.map(LocalizedText::from),
             vertical_scroll_state: Default::default(),
             horizontal_scroll_state: Default::default(),
             highlighted_widget_id: Default::default(),
@@ -1567,7 +1610,11 @@ impl<V: warpui::View> PageType<V> {
                     if widget.should_render(app) {
                         if let Some(title) = title {
                             let col = Flex::column()
-                                .with_child(render_page_title(title, HEADER_FONT_SIZE, appearance))
+                                .with_child(render_page_title(
+                                    title.resolve_settings(app),
+                                    HEADER_FONT_SIZE,
+                                    appearance,
+                                ))
                                 .with_child(widget.render_widget(view, false, appearance, app));
                             page = col.finish();
                         } else {
@@ -1585,7 +1632,11 @@ impl<V: warpui::View> PageType<V> {
             } => {
                 let mut page = Flex::column();
                 if let Some(title) = title {
-                    page.add_child(render_page_title(title, HEADER_FONT_SIZE, appearance));
+                    page.add_child(render_page_title(
+                        title.resolve_settings(app),
+                        HEADER_FONT_SIZE,
+                        appearance,
+                    ));
                 }
                 for widget in widgets {
                     let highlighted =
@@ -1604,19 +1655,27 @@ impl<V: warpui::View> PageType<V> {
             } => {
                 let mut page = Flex::column();
                 if let Some(title) = title {
-                    page.add_child(render_page_title(title, HEADER_FONT_SIZE, appearance));
+                    page.add_child(render_page_title(
+                        title.resolve_settings(app),
+                        HEADER_FONT_SIZE,
+                        appearance,
+                    ));
                 }
                 let num_categories = categories.len();
                 for (i, category) in categories.into_iter().enumerate() {
-                    if !category.title.is_empty() {
+                    if !category.title.resolve_settings(app).is_empty() {
                         if let Some(subtitle) = category.subtitle {
                             page.add_child(render_sub_header_with_description(
                                 appearance,
-                                category.title,
-                                subtitle,
+                                category.title.resolve_settings(app),
+                                subtitle.resolve_settings(app),
                             ));
                         } else {
-                            page.add_child(render_sub_header(appearance, category.title, None));
+                            page.add_child(render_sub_header(
+                                appearance,
+                                category.title.resolve_settings(app),
+                                None,
+                            ));
                         }
                     }
                     for widget in &category.widgets {
@@ -1734,20 +1793,20 @@ impl<V: warpui::View> PageType<V> {
 pub(super) enum FilteredPageType<'a, V: warpui::View> {
     Monolith {
         widget: Option<&'a dyn SettingsWidget<View = V>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         vertical_scroll_state: Option<ClippedScrollStateHandle>,
         horizontal_scroll_state: Option<ClippedScrollStateHandle>,
     },
     Uncategorized {
         widgets: Vec<&'a dyn SettingsWidget<View = V>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         vertical_scroll_state: ClippedScrollStateHandle,
         horizontal_scroll_state: ClippedScrollStateHandle,
         highlighted_widget_id: Option<&'static str>,
     },
     Categorized {
         categories: Vec<FilteredCategory<'a, V>>,
-        title: Option<&'static str>,
+        title: Option<LocalizedText>,
         vertical_scroll_state: ClippedScrollStateHandle,
         horizontal_scroll_state: ClippedScrollStateHandle,
         highlighted_widget_id: Option<&'static str>,
@@ -1756,8 +1815,8 @@ pub(super) enum FilteredPageType<'a, V: warpui::View> {
 
 /// A grouping of related [`SettingsWidget`]s that fall under the same sub-header.
 pub(super) struct Category<V: warpui::View> {
-    title: &'static str,
-    subtitle: Option<&'static str>,
+    title: LocalizedText,
+    subtitle: Option<LocalizedText>,
     widgets: Vec<Box<dyn SettingsWidget<View = V>>>,
 }
 
@@ -1767,22 +1826,22 @@ impl<V: warpui::View> Category<V> {
         widgets: Vec<Box<dyn SettingsWidget<View = V>>>,
     ) -> Self {
         Self {
-            title,
+            title: LocalizedText::from(title),
             subtitle: None,
             widgets,
         }
     }
 
     pub(super) fn with_subtitle(mut self, subtitle: &'static str) -> Self {
-        self.subtitle = Some(subtitle);
+        self.subtitle = Some(LocalizedText::from(subtitle));
         self
     }
 }
 
 /// A [`Category`] with only the results which match a search query.
 pub(super) struct FilteredCategory<'a, V: warpui::View> {
-    pub(super) title: &'static str,
-    pub(super) subtitle: Option<&'static str>,
+    pub(super) title: LocalizedText,
+    pub(super) subtitle: Option<LocalizedText>,
     pub(super) widgets: Vec<&'a dyn SettingsWidget<View = V>>,
 }
 
@@ -1843,6 +1902,7 @@ pub(super) fn build_reset_button(
     appearance: &Appearance,
     mouse_state: MouseStateHandle,
     changed_from_default: bool,
+    app: &AppContext,
 ) -> Button {
     let theme = appearance.theme();
     appearance
@@ -1858,5 +1918,49 @@ pub(super) fn build_reset_button(
             font_size: Some(appearance.ui_font_size() * 0.8),
             ..Default::default()
         })
-        .with_text_label("Reset to default".to_owned())
+        .with_text_label(localized_settings_text("Reset to default", app).to_owned())
+}
+
+#[cfg(test)]
+mod reset_button_tests {
+    use super::build_reset_button;
+    use crate::appearance::Appearance;
+    use crate::localization::UiLanguage;
+    use crate::settings::AppLocalizationSettings;
+    use crate::test_util::settings::initialize_settings_for_tests;
+    use settings::Setting;
+    use warpui::elements::MouseStateHandle;
+    use warpui::ui_components::components::UiComponent;
+    use warpui::{App, Element, SingletonEntity};
+
+    #[test]
+    fn reset_button_uses_simplified_chinese_label() {
+        App::test((), |mut app| async move {
+            initialize_settings_for_tests(&mut app);
+            app.add_singleton_model(|_| Appearance::mock());
+
+            app.update(|ctx| {
+                AppLocalizationSettings::handle(ctx).update(ctx, |settings, ctx| {
+                    settings
+                        .selected_ui_language
+                        .set_value(UiLanguage::ChineseSimplified, ctx)
+                        .unwrap();
+                });
+            });
+
+            app.update(|ctx| {
+                let appearance = Appearance::as_ref(ctx);
+                let button_text =
+                    build_reset_button(appearance, MouseStateHandle::default(), true, ctx)
+                        .build()
+                        .debug_text_content()
+                        .unwrap_or_default();
+
+                assert!(
+                    button_text.contains("重置为默认值"),
+                    "Expected localized reset label in button: {button_text}"
+                );
+            });
+        })
+    }
 }

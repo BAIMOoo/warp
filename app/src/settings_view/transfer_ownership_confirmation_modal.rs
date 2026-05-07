@@ -7,9 +7,12 @@ use warpui::{
     AppContext, Element, Entity, SingletonEntity, TypedActionView, View, ViewContext,
 };
 
-use crate::appearance::Appearance;
 use crate::auth::UserUid;
+use crate::localization::{
+    localized_for_app, localized_transfer_ownership_confirmation_description, UiStringKey,
+};
 use crate::server::ids::ServerId;
+use crate::{appearance::Appearance, settings::AppLocalizationSettings};
 
 pub struct TransferOwnershipConfirmationModal {
     cancel_mouse_state: MouseStateHandle,
@@ -20,7 +23,11 @@ pub struct TransferOwnershipConfirmationModal {
 }
 
 impl TransferOwnershipConfirmationModal {
-    pub fn new() -> Self {
+    pub fn new(ctx: &mut ViewContext<Self>) -> Self {
+        ctx.subscribe_to_model(&AppLocalizationSettings::handle(ctx), |_, _, _, ctx| {
+            ctx.notify();
+        });
+
         Self {
             cancel_mouse_state: Default::default(),
             confirm_mouse_state: Default::default(),
@@ -53,10 +60,7 @@ impl View for TransferOwnershipConfirmationModal {
         let email = self.new_owner_email.as_deref().unwrap_or_default();
 
         let description_text = Text::new(
-            format!(
-                "Are you sure you want to transfer team ownership to {}? You will no longer be the owner and will not be able to take any administrative actions for this team.",
-                email
-            ),
+            localized_transfer_ownership_confirmation_description(email, app),
             appearance.ui_font_family(),
             14.,
         )
@@ -75,7 +79,9 @@ impl View for TransferOwnershipConfirmationModal {
                 appearance
                     .ui_builder()
                     .button(ButtonVariant::Secondary, self.cancel_mouse_state.clone())
-                    .with_text_label("Cancel".to_string())
+                    .with_text_label(
+                        localized_for_app(UiStringKey::SettingsDialogCancel, app).to_string(),
+                    )
                     .with_style(button_style)
                     .build()
                     .on_click(|ctx, _, _| {
@@ -88,7 +94,13 @@ impl View for TransferOwnershipConfirmationModal {
                     appearance
                         .ui_builder()
                         .button(ButtonVariant::Accent, self.confirm_mouse_state.clone())
-                        .with_text_label("Transfer".to_string())
+                        .with_text_label(
+                            localized_for_app(
+                                UiStringKey::SettingsTransferOwnershipConfirmButton,
+                                app,
+                            )
+                            .to_string(),
+                        )
                         .with_style(button_style)
                         .build()
                         .on_click(|ctx, _, _| {
