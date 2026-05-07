@@ -80,7 +80,8 @@ jobs:
         run: |
           ./script/install_cargo_release_deps
           ./script/install_cargo_bundle
-          brew install create-dmg
+          brew install create-dmg protobuf
+          protoc --version
         shell: bash
 
       - name: Add requested Rust target
@@ -144,9 +145,14 @@ jobs:
           $env:Path = "C:\cargo\bin;$env:USERPROFILE\.cargo\bin;$env:Path"
           bash ./script/install_cargo_release_deps --no-build-deps
 
-      - name: Install Inno Setup
+      - name: Install Inno Setup and protoc
         shell: pwsh
-        run: choco install innosetup --yes --no-progress
+        run: |
+          choco install innosetup protoc --yes --no-progress
+          $Protoc = (Get-Command protoc.exe -ErrorAction Stop).Source
+          Write-Output "Using protoc at $Protoc"
+          "PROTOC=$Protoc" >> $env:GITHUB_ENV
+          protoc --version
 
       - name: Add arm64 Rust target
         if: ${{ inputs.windows_arch == 'arm64' }}
