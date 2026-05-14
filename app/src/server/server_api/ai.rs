@@ -213,6 +213,9 @@ pub struct SpawnAgentRequest {
     pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team: Option<bool>,
+    /// Agent identity UID to use as the execution principal for the run.
+    #[serde(rename = "agent_identity_uid", skip_serializing_if = "Option::is_none")]
+    pub agent_identity_uid: Option<String>,
     /// Use a Claude-compatible skill as the base prompt.
     /// Format: "repo:skill_name" or just "skill_name".
     /// The skill is resolved at runtime in the agent environment.
@@ -242,6 +245,10 @@ pub struct SpawnAgentRequest {
     /// queued execution input and resolves the prefix in place at rehydration time.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initial_snapshot_token: Option<InitialSnapshotToken>,
+    /// When `Some(true)`, the cloud agent skips the end-of-run snapshot upload.
+    /// Set by the client when cloud conversation storage is disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_disabled: Option<bool>,
 }
 
 /// Server-minted token returned by `POST /agent/handoff/upload-snapshot` that scopes a batch
@@ -282,6 +289,13 @@ pub struct UploadLocalHandoffSnapshotResponse {
     pub initial_snapshot_token: InitialSnapshotToken,
     pub expires_at: String,
     pub uploads: Vec<UploadTarget>,
+}
+
+/// Request body for `POST /agent/conversations/{conversation_id}/fork`.
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct ForkConversationRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 
 /// Response body for `POST /agent/conversations/{conversation_id}/fork`. The returned id is sent
@@ -926,6 +940,7 @@ pub trait AIClient: 'static + Send + Sync {
     async fn fork_conversation(
         &self,
         conversation_id: String,
+        title: Option<String>,
     ) -> anyhow::Result<ForkConversationResponse, anyhow::Error>;
 
     async fn list_ambient_agent_tasks(
@@ -1412,6 +1427,14 @@ impl AIClient for ServerApi {
                         harness: convert_harness(h.harness).into(),
                         display_name: h.display_name,
                         enabled: h.enabled,
+                        available_models: h
+                            .available_models
+                            .into_iter()
+                            .map(|m| crate::ai::harness_availability::HarnessModelInfo {
+                                id: m.id.into_inner(),
+                                display_name: m.display_name,
+                            })
+                            .collect(),
                     })
                     .collect())
             }
@@ -1660,9 +1683,11 @@ impl AIClient for ServerApi {
     async fn fork_conversation(
         &self,
         conversation_id: String,
+        title: Option<String>,
     ) -> anyhow::Result<ForkConversationResponse, anyhow::Error> {
+        let request = ForkConversationRequest { title };
         let response: ForkConversationResponse = self
-            .post_public_api(&build_fork_conversation_url(&conversation_id), &())
+            .post_public_api(&build_fork_conversation_url(&conversation_id), &request)
             .await?;
         Ok(response)
     }
@@ -2422,6 +2447,9 @@ impl From<warp_graphql::queries::get_feature_model_choices::LlmModelHost> for LL
             warp_graphql::queries::get_feature_model_choices::LlmModelHost::AwsBedrock => {
                 LLMModelHost::AwsBedrock
             }
+            warp_graphql::queries::get_feature_model_choices::LlmModelHost::CustomEndpoint => {
+                LLMModelHost::CustomEndpoint
+            }
             warp_graphql::queries::get_feature_model_choices::LlmModelHost::Other(value) => {
                 report_error!(anyhow!(
                     "Unknown LlmModelHost '{value}'. Make sure to update client GraphQL types!"
@@ -2859,5 +2887,5 @@ impl StoreClient for ServerApi {
 }
 
 #[cfg(test)]
-#[path = "ai_test.rs"]
+#[path = "ai_tests.rs"]
 mod tests;

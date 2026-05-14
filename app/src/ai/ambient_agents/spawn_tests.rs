@@ -32,6 +32,7 @@ fn task_with(
         session_id,
         session_link,
         creator: None,
+        executor: None,
         conversation_id: None,
         request_usage: None,
         agent_config_snapshot: None,
@@ -364,6 +365,7 @@ async fn poll_retries_transient_429_errors() {
         config: None,
         title: None,
         team: None,
+        agent_identity_uid: None,
         skill: None,
         attachments: vec![],
         interactive: None,
@@ -372,6 +374,7 @@ async fn poll_retries_transient_429_errors() {
         referenced_attachments: vec![],
         conversation_id: None,
         initial_snapshot_token: None,
+        snapshot_disabled: None,
     };
 
     let mut stream = Box::pin(spawn_task(request, ai_client, None));
@@ -430,6 +433,7 @@ async fn poll_fails_on_permanent_http_error() {
         config: None,
         title: None,
         team: None,
+        agent_identity_uid: None,
         skill: None,
         attachments: vec![],
         interactive: None,
@@ -438,6 +442,7 @@ async fn poll_fails_on_permanent_http_error() {
         referenced_attachments: vec![],
         conversation_id: None,
         initial_snapshot_token: None,
+        snapshot_disabled: None,
     };
 
     let mut stream = Box::pin(spawn_task(request, ai_client, None));
@@ -496,6 +501,7 @@ async fn poll_gives_up_after_max_transient_retries() {
         config: None,
         title: None,
         team: None,
+        agent_identity_uid: None,
         skill: None,
         attachments: vec![],
         interactive: None,
@@ -504,6 +510,7 @@ async fn poll_gives_up_after_max_transient_retries() {
         referenced_attachments: vec![],
         conversation_id: None,
         initial_snapshot_token: None,
+        snapshot_disabled: None,
     };
 
     let mut stream = Box::pin(spawn_task(request, ai_client, None));
@@ -557,6 +564,7 @@ async fn poll_stops_on_terminal_failure_like_state() {
         config: None,
         title: None,
         team: None,
+        agent_identity_uid: None,
         skill: None,
         attachments: vec![],
         interactive: None,
@@ -565,6 +573,7 @@ async fn poll_stops_on_terminal_failure_like_state() {
         referenced_attachments: vec![],
         conversation_id: None,
         initial_snapshot_token: None,
+        snapshot_disabled: None,
     };
 
     let mut stream = Box::pin(spawn_task(request, ai_client, None));
@@ -701,6 +710,7 @@ async fn poll_for_session_join_info_waits_until_link_is_available() {
         config: None,
         title: None,
         team: None,
+        agent_identity_uid: None,
         skill: None,
         attachments: vec![],
         interactive: None,
@@ -709,6 +719,7 @@ async fn poll_for_session_join_info_waits_until_link_is_available() {
         referenced_attachments: vec![],
         conversation_id: None,
         initial_snapshot_token: None,
+        snapshot_disabled: None,
     };
 
     let mut stream = Box::pin(spawn_task(request, ai_client, None));

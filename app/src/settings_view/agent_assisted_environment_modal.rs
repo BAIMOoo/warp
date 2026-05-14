@@ -24,6 +24,7 @@ use warpui::{
 use crate::{
     appearance::Appearance,
     localization::localized_settings_text,
+    modal::MODAL_BACKDROP_OPACITY,
     settings::AppLocalizationSettings,
     themes::theme::Blend,
     ui_components::{
@@ -715,7 +716,7 @@ impl AgentAssistedEnvironmentModal {
             .finish();
 
         Container::new(Align::new(dialog).finish())
-            .with_background_color(ColorU::new(0, 0, 0, 179))
+            .with_background_color(ColorU::new(0, 0, 0, MODAL_BACKDROP_OPACITY))
             .with_corner_radius(app.windows().window_corner_radius())
             .finish()
     }

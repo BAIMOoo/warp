@@ -140,6 +140,15 @@ impl SessionContext {
             current_working_directory: None,
         }
     }
+
+    #[cfg(test)]
+    pub fn new_with_session_type_for_test(session_type: Option<SessionType>) -> Self {
+        SessionContext {
+            session_type,
+            shell: None,
+            current_working_directory: None,
+        }
+    }
 }
 
 pub enum BlocklistAIControllerEvent {
@@ -530,11 +539,18 @@ impl BlocklistAIController {
             let AgentViewControllerEvent::ExitedAgentView {
                 conversation_id,
                 final_exchange_count,
+                is_exit_before_new_entrance,
                 ..
             } = event
             else {
                 return;
             };
+
+            // Skip if this exit is part of an in-place switch — cancelling here
+            // would kill an in-flight stream every time the user navigates.
+            if *is_exit_before_new_entrance {
+                return;
+            }
 
             // If we exited a brand-new empty conversation, there's nothing meaningful to cancel.
             if *final_exchange_count == 0 {
@@ -736,11 +752,11 @@ impl BlocklistAIController {
         };
         inputs.push(ai_input);
 
-        // Piggyback any pending orchestration config update for this conversation.
-        let taken_dirty_event = AIDocumentModel::handle(ctx).update(ctx, |model, _| {
-            model.take_dirty_orchestration_event(&conversation_id)
+        // Piggyback any pending orchestration config updates for this conversation.
+        let taken_dirty_events = AIDocumentModel::handle(ctx).update(ctx, |model, _| {
+            model.take_dirty_orchestration_events(&conversation_id)
         });
-        if let Some(ref dirty_event) = taken_dirty_event {
+        for dirty_event in &taken_dirty_events {
             inputs.push(AIAgentInput::OrchestrationConfigUpdate {
                 plan_id: dirty_event.plan_id.clone(),
                 config: dirty_event.config.clone(),
@@ -769,13 +785,13 @@ impl BlocklistAIController {
             ctx,
         );
 
-        // If the request failed, re-insert the dirty event so it isn't
+        // If the request failed, re-insert the dirty events so they aren't
         // silently lost.
         if let Err(e) = &send_result {
             log::error!("Failed to send agent request: {e:?}");
-            if let Some(dirty_event) = taken_dirty_event {
+            if !taken_dirty_events.is_empty() {
                 AIDocumentModel::handle(ctx).update(ctx, |model, _| {
-                    model.set_dirty_orchestration_event(conversation_id, dirty_event);
+                    model.set_dirty_orchestration_events(conversation_id, taken_dirty_events);
                 });
             }
         }
@@ -2100,6 +2116,7 @@ impl BlocklistAIController {
                 self.terminal_view_id,
                 is_autoexecute_override,
                 false,
+                false,
                 ctx,
             )
         });
@@ -2383,6 +2400,15 @@ impl BlocklistAIController {
     ) -> bool {
         self.in_flight_response_streams
             .try_cancel_stream(stream_id, reason, ctx)
+    }
+
+    pub fn has_active_stream_for_conversation(
+        &self,
+        conversation_id: AIConversationId,
+        app: &AppContext,
+    ) -> bool {
+        self.in_flight_response_streams
+            .has_active_stream_for_conversation(conversation_id, app)
     }
 
     /// Cancels 'progress' for the active conversation if there is one:
@@ -2822,9 +2848,10 @@ impl BlocklistAIController {
             // persisting the conversation.
             history_model.update_conversation_cost_and_usage_for_request(
                 conversation_id,
-                finished_event
-                    .request_cost
-                    .map(|cost| RequestCost::new(cost.exact.into())),
+                finished_event.request_cost.map(|cost| {
+                    // Total credits charged for this request = inference (`exact`) + platform.
+                    RequestCost::new(f64::from(cost.exact) + f64::from(cost.platform_credits))
+                }),
                 finished_event.token_usage,
                 finished_event.conversation_usage_metadata.take(),
                 did_request_contain_user_query,

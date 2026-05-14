@@ -16,8 +16,6 @@ pub(super) mod util;
 pub use ai::agent::{action::*, action_result::*, AIAgentCitation, FileLocations};
 use warp_core::features::FeatureFlag;
 
-#[cfg(test)]
-mod suggestion_test;
 use crate::ai::block_context::BlockContext;
 use crate::ai::blocklist::block::view_impl::output::are_all_text_sections_empty;
 use crate::ai::skills::SkillDescriptor;
@@ -740,6 +738,7 @@ impl ProgrammingLanguage {
                 "css" => Some("css"),
                 "c" => Some("c"),
                 "json" => Some("json"),
+                "jq" => Some("jq"),
                 "hcl" | "terraform" | "tf" => Some("hcl"),
                 "lua" => Some("lua"),
                 "ruby" | "rb" => Some("rb"),
@@ -3075,5 +3074,5 @@ impl Suggestions {
 }
 
 #[cfg(test)]
-#[path = "mod_test.rs"]
+#[path = "mod_tests.rs"]
 mod tests;
